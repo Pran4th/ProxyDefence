@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: defenseintel
+    volumes:
+      - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  ingest-service:
+    build: ./services/ingest-service
+    container_name: ingest-service
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "5001:5001"
+
+  ml-service:
+    build: ./services/ml-service
+    container_name: ml-service
+    restart: always
+    ports:
+      - "5002:5002"
+
+  conflict-api:
+    build: ./services/conflict-api
+    container_name: conflict-api
+    restart: always
+    depends_on:
+      - postgres
+      - ml-service
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    restart: always
+    depends_on:
+      - conflict-api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
