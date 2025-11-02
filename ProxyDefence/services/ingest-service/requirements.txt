@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+requests
+pydantic
+confluent-kafka==2.3.0  # Use this instead of kafka-python
+requests
