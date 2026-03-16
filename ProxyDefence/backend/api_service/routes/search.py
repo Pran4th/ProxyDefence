@@ -1,13 +1,12 @@
-from fastapi import APIRouter, HTTPException, Query
-from backend.api_service.main import app
+from fastapi import APIRouter, HTTPException, Query, Request
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
 @router.get("/")
-async def search_articles(q: str = Query(..., min_length=2)):
+async def search_articles(request: Request, q: str = Query(..., min_length=2)):
     try:
-        response = await app.state.es_client.search(
+        response = await request.app.state.es_client.search(
             index="processed_articles",
             body={
                 "query": {

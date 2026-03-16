@@ -1,18 +1,18 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Optional
-from backend.api_service.main import app
 
 router = APIRouter(prefix="/articles", tags=["Articles"])
 
 
 @router.get("/")
 async def get_articles(
+    request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     sentiment: Optional[str] = Query(None)
 ):
     try:
-        async with app.state.pg_pool.acquire() as conn:
+        async with request.app.state.pg_pool.acquire() as conn:
             if sentiment:
                 articles = await conn.fetch(
                     "SELECT * FROM processed_articles WHERE sentiment = $1 ORDER BY published_at DESC LIMIT $2 OFFSET $3",
@@ -29,9 +29,9 @@ async def get_articles(
 
 
 @router.get("/{article_id}")
-async def get_article(article_id: int):
+async def get_article(article_id: int, request: Request):
     try:
-        async with app.state.pg_pool.acquire() as conn:
+        async with request.app.state.pg_pool.acquire() as conn:
             article = await conn.fetchrow(
                 "SELECT * FROM processed_articles WHERE article_id = $1",
                 article_id

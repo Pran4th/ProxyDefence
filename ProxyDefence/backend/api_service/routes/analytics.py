@@ -1,13 +1,12 @@
-from fastapi import APIRouter, HTTPException
-from backend.api_service.main import app
+from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
 @router.get("/summary")
-async def get_analytics_summary():
+async def get_analytics_summary(request: Request):
     try:
-        async with app.state.pg_pool.acquire() as conn:
+        async with request.app.state.pg_pool.acquire() as conn:
             total_articles = await conn.fetchval("SELECT COUNT(*) FROM processed_articles")
 
             last_24h = await conn.fetchval(
@@ -33,9 +32,9 @@ async def get_analytics_summary():
 
 
 @router.get("/graph")
-async def get_attack_graph():
+async def get_attack_graph(request: Request):
     try:
-        async with app.state.pg_pool.acquire() as conn:
+        async with request.app.state.pg_pool.acquire() as conn:
             rows = await conn.fetch("""
                 SELECT pa.id, pa.title, ee.entity_text, ee.entity_type
                 FROM processed_articles pa
