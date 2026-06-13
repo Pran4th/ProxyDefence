@@ -1,0 +1,6 @@
+fastapi==0.104.1
+asyncpg==0.29.0
+pgvector==0.2.5
+uvicorn[standard]==0.24.0
+fastembed==0.7.1
+numpy==1.26.4

@@ -57,7 +57,7 @@ services:
       retries: 10
   
   postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: postgres-db
     restart: always
     environment:
@@ -104,6 +104,17 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+  embedding-service:
+    build: ./services/embedding-service
+    container_name: embedding-service
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - proxy_net
+    ports:
+      - "8005:8000"
   
   database-service:
     build: ./services/database-service

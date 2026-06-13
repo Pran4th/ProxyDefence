@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+
 from typing import List, Optional
 import asyncpg
 from elasticsearch import AsyncElasticsearch
@@ -9,14 +10,18 @@ import os
 
 app = FastAPI(title="ProxyDefence Conflict API", version="1.0.0")
 
-# CORS middleware
+origins = [
+    "http://localhost:8081",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Database configuration
 POSTGRES_CONFIG = {
     "host": os.getenv("POSTGRES_HOST", "postgres"),

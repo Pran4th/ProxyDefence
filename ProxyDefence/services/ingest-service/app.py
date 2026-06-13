@@ -91,10 +91,27 @@ def fetch_real_news():
 @app.on_event("startup")
 def startup_event():
     logger.info("Starting up Ingest Service...")
-    # Add scheduled job: Fetch news every 1 hour
-    scheduler.add_job(fetch_real_news, 'interval', hours=1, id='fetch_news_job')
+
+    # Immediately fetch news
+    try:
+        logger.info("Running initial news fetch...")
+        fetch_real_news()
+    except Exception as e:
+        logger.error(f"Initial fetch failed: {e}")
+
+    # Schedule recurring fetches
+    scheduler.add_job(
+        fetch_real_news,
+        'interval',
+        hours=1,
+        id='fetch_news_job'
+    )
+
     scheduler.start()
-    logger.info("Scheduler started - Fetching news every 1 hour")
+
+    logger.info(
+        "Scheduler started - Fetching news every 1 hour"
+    )
 
 @app.on_event("shutdown")
 def shutdown_event():

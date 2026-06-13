@@ -1,65 +1,46 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Shield, Chrome } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Shield, LockKeyhole, UserPlus } from "lucide-react";
 
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-
-// Import our new Supabase client
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 const Auth = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+
+  const { login, register } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = location.state?.from || "/dashboard";
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
-
     try {
-      // FOR DEMO PURPOSES ONLY: Bypass Supabase for now
-      // Since we don't have valid Supabase credentials set up in this environment
-      console.log("Mocking authentication for demo...");
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Welcome back!",
-        description: "Secure connection established (Demo Mode).",
-      });
-      navigate("/dashboard");
-
-      /* 
-      // REAL AUTH CODE (Restored when credentials are valid)
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
-        toast({ title: "Account created!", description: "Check your email." });
+      if (isRegisterMode) {
+        await register(email, username, password);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        toast({ title: "Welcome back!", description: "Connection established." });
-        navigate("/dashboard");
+        await login(email, password);
       }
-      */
+
+      toast({
+        title: isRegisterMode ? "Account created" : "Welcome back",
+        description: "Secure access to ProxyDefence has been granted.",
+      });
+      navigate(redirectTo, { replace: true });
     } catch (error: any) {
       toast({
-        title: "Authentication Failed",
-        description: error.message || "An error occurred.",
+        title: "Authentication failed",
+        description: error?.response?.data?.detail || error.message || "Unable to complete authentication.",
         variant: "destructive",
       });
     } finally {
@@ -67,130 +48,99 @@ const Auth = () => {
     }
   };
 
-  const handleGoogleAuth = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      toast({
-        title: "Google Auth Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      
-      <div className="pt-24 pb-20 flex items-center justify-center px-4">
-        <div className="w-full max-w-md">
-          <div className="bg-card border border-border rounded-2xl p-8 shadow-elevation">
-            <div className="text-center mb-8">
-              <div className="h-16 w-16 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-4">
-                <Shield className="h-8 w-8 text-primary-foreground" />
-              </div>
-              <h1 className="text-3xl font-bold mb-2">
-                {isSignUp ? "Create Account" : "Welcome Back"}
+      <div className="relative overflow-hidden px-4 pb-20 pt-28">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.22),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(239,68,68,0.16),transparent_28%)]" />
+        <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="rounded-[2rem] border border-border bg-card/60 p-8 shadow-elevation backdrop-blur lg:p-10">
+            <div className="mb-8">
+              <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-primary">
+                <Shield className="h-3.5 w-3.5" />
+                Analyst Identity
+              </p>
+              <h1 className="text-4xl font-bold leading-tight">
+                {isRegisterMode ? "Create your ProxyDefence operator account" : "Sign in to the intelligence workspace"}
               </h1>
-              <p className="text-muted-foreground">
-                {isSignUp
-                  ? "Start protecting your network today"
-                  : "Sign in to access your defense dashboard"}
+              <p className="mt-3 max-w-xl text-muted-foreground">
+                Access the live threat feed, geopolitical analytics, entity graphing, and the ML intelligence console.
               </p>
             </div>
 
-            <form onSubmit={handleAuth} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {isRegisterMode && (
+                <div>
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="intel-operator"
+                    className="mt-2"
+                    required
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@company.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="analyst@proxydefence.io"
+                  className="mt-2"
                   required
-                  className="mt-1"
                 />
               </div>
-
               <div>
                 <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Enter your password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="At least 8 characters"
+                  className="mt-2"
                   required
-                  className="mt-1"
                 />
               </div>
-
-              {!isSignUp && (
-                <div className="text-right">
-                  <a href="#" className="text-sm text-primary hover:underline">
-                    Forgot password?
-                  </a>
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                variant="hero"
-                className="w-full"
-                disabled={loading}
-              >
-                {loading
-                  ? "Processing..."
-                  : isSignUp
-                  ? "Create Account"
-                  : "Sign In"}
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-card text-muted-foreground">Or continue with</span>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handleGoogleAuth}
-              >
-                <Chrome className="h-4 w-4 mr-2" />
-                Google
+              <Button type="submit" variant="hero" className="w-full" disabled={loading}>
+                {loading ? "Authenticating..." : isRegisterMode ? "Create account" : "Sign in"}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
-              >
-                {isSignUp ? (
-                  <>
-                    Already have an account?{" "}
-                    <span className="font-semibold">Sign In</span>
-                  </>
-                ) : (
-                  <>
-                    Don't have an account?{" "}
-                    <span className="font-semibold">Sign Up</span>
-                  </>
-                )}
-              </button>
+            <div className="mt-6 flex items-center justify-between rounded-2xl border border-border bg-background/70 px-4 py-3">
+              <div className="flex items-center gap-3">
+                {isRegisterMode ? <UserPlus className="h-4 w-4 text-primary" /> : <LockKeyhole className="h-4 w-4 text-primary" />}
+                <p className="text-sm text-muted-foreground">
+                  {isRegisterMode ? "Already provisioned?" : "Need analyst access?"}
+                </p>
+              </div>
+              <Button variant="ghost" onClick={() => setIsRegisterMode((value) => !value)}>
+                {isRegisterMode ? "Sign in instead" : "Register instead"}
+              </Button>
             </div>
-          </div>
+          </section>
+
+          <aside className="space-y-6 rounded-[2rem] border border-border bg-card/50 p-8 shadow-elevation backdrop-blur">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Security model</p>
+              <h2 className="mt-3 text-2xl font-semibold">JWT-authenticated analyst workflows</h2>
+            </div>
+            <div className="space-y-4">
+              {[
+                "Protected intelligence dashboards with role-aware access.",
+                "Token-based API authentication for search, analytics, and graph data.",
+                "Password hashing and persistent user identities in PostgreSQL.",
+              ].map((item) => (
+                <div key={item} className="rounded-2xl border border-border bg-background/60 p-4 text-sm text-muted-foreground">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </aside>
         </div>
       </div>
     </div>

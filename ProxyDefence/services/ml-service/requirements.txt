@@ -3,4 +3,4 @@ uvicorn[standard]==0.24.0
 confluent-kafka==2.3.0
 spacy==3.7.2
 transformers==4.35.2
-torch==2.1.1
+sentence-transformers==2.7.0
