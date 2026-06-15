@@ -109,6 +109,15 @@ async def get_attack_graph(request: Request):
         raise HTTPException(status_code=500, detail=f"Graph error: {str(e)}")
 
 
+@router.get("/dashboard-v2")
+async def get_dashboard_stats(
+    request: Request
+):
+    repo = IntelligenceRepository(
+        request.app.state.pg_pool
+    )
+
+    return await repo.get_dashboard_stats()
 @router.get("/timeseries")
 async def get_timeseries(request: Request):
     try:

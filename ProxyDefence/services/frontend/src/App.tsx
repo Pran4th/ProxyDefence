@@ -21,12 +21,26 @@ const Events = lazy(() => import("./pages/Events"));
 const EventDetails = lazy(() => import("./pages/EventDetails"));
 const Entities = lazy(() => import("./pages/Entities"));
 const EntityDetails = lazy(() => import("./pages/EntityDetails"));
+const GraphExplorer = lazy(() => import("./pages/GraphExplorer"));
 const Search = lazy(() => import("./pages/Search"));
 const Copilot = lazy(
   () => import("./pages/Copilot")
 );
 const Briefings = lazy(
   () => import("./pages/Briefings")
+);
+const Alerts = lazy(
+  () => import("./pages/Alerts")
+);
+const Watchlists = lazy(
+  () => import("./pages/Watchlists")
+);
+const Cases = lazy(
+  () => import("./pages/Cases")
+);
+
+const Reports = lazy(
+  () => import("./pages/Reports")
 );
 const queryClient = new QueryClient();
 
@@ -117,6 +131,14 @@ const App = () => (
               }
               />
               <Route
+                path="/graph"
+                element={
+                  <ProtectedRoute>
+                    <GraphExplorer />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/search"
                 element={
               <ProtectedRoute>
@@ -140,6 +162,39 @@ const App = () => (
               </ProtectedRoute>
              }
             />
+            <Route
+  path="/alerts"
+  element={
+    <ProtectedRoute>
+      <Alerts />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/watchlists"
+  element={
+    <ProtectedRoute>
+      <Watchlists />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/cases"
+  element={
+    <ProtectedRoute>
+      <Cases />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/reports"
+  element={
+    <ProtectedRoute>
+      <Reports />
+    </ProtectedRoute>
+  }
+/>
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

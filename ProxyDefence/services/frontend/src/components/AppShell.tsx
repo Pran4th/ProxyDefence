@@ -11,6 +11,8 @@ import {
   UserCircle2,
   Bot,
   FileText,
+  Bell,
+  ShieldCheck,
   Search as SearchIcon
 } from "lucide-react";
 
@@ -26,6 +28,7 @@ const navItems = [
   { to: "/profile", label: "Profile", icon: Settings },
   { to: "/events", label: "Events", icon: CalendarDays },
   {to: "/search",label: "Search",icon: SearchIcon},
+  
   {
   to: "/copilot",
   label: "Copilot",
@@ -34,6 +37,26 @@ const navItems = [
 {
   to: "/briefings",
   label: "Briefings",
+  icon: FileText,
+},
+{
+  to: "/alerts",
+  label: "Alerts",
+  icon: Bell,
+},
+{
+  to: "/watchlists",
+  label: "Watchlists",
+  icon: ShieldCheck,
+},
+{
+  to: "/cases",
+  label: "Cases",
+  icon: Shield,
+},
+{
+  to: "/reports",
+  label: "Reports",
   icon: FileText,
 },
 ];

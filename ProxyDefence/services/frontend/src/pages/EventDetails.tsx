@@ -2,32 +2,40 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import AppShell from "@/components/AppShell";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 import {
   fetchEvent,
-  fetchEventArticles,
   type EventDetails,
   type Article,
 } from "@/lib/api";
 
+type EventArticle = Pick<Article, "id" | "title" | "topic" | "threat_score"> & {
+  similarity_score?: number;
+};
+
+type EventDetailsPayload = EventDetails & {
+  articles: EventArticle[];
+};
+
 const EventDetailsPage = () => {
   const { eventId } = useParams();
 
-  const [event, setEvent] = useState<EventDetails | null>(null);
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [event, setEvent] = useState<EventDetailsPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!eventId) return;
 
-    Promise.all([
-      fetchEvent(Number(eventId)),
-      fetchEventArticles(Number(eventId)),
-    ])
-      .then(([eventData, articleData]) => {
-        setEvent(eventData);
-        setArticles(articleData);
-      })
+    fetchEvent(Number(eventId))
+      .then((eventData) => setEvent(eventData as EventDetailsPayload))
       .finally(() => setLoading(false));
   }, [eventId]);
 
@@ -88,7 +96,7 @@ const EventDetailsPage = () => {
 
           <div className="mt-6 rounded-2xl border border-border bg-card p-6">
             <h2 className="mb-3 text-xl font-semibold">
-              Executive Summary
+              Event Summary
             </h2>
 
             <p className="text-muted-foreground">
@@ -98,29 +106,33 @@ const EventDetailsPage = () => {
 
           <div className="mt-6 rounded-2xl border border-border bg-card p-6">
             <h2 className="mb-4 text-xl font-semibold">
-              Top Entities
+              Related Entities
             </h2>
 
-            <div className="flex flex-wrap gap-3">
-              {event.entities?.map((entity) => (
-                <div
-                  key={`${entity.entity_text}-${entity.entity_type}`}
-                  className="rounded-xl border border-border px-4 py-3"
-                >
-                  <div className="font-medium">
-                    {entity.entity_text}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    {entity.entity_type}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    Mentions: {entity.mention_count}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Mentions</TableHead>
+                  <TableHead>Confidence</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {event.entities?.map((entity) => (
+                  <TableRow key={`${entity.entity_text}-${entity.entity_type}`}>
+                    <TableCell className="font-medium">
+                      {entity.entity_text}
+                    </TableCell>
+                    <TableCell>{entity.entity_type}</TableCell>
+                    <TableCell>{entity.mention_count}</TableCell>
+                    <TableCell>
+                      {Math.round((entity.avg_confidence ?? 0) * 100)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
 
           <div className="mt-6 rounded-2xl border border-border bg-card p-6">
@@ -128,31 +140,32 @@ const EventDetailsPage = () => {
               Related Articles
             </h2>
 
-            <div className="space-y-3">
-              {articles.map((article) => (
-                <div
-                  key={article.id}
-                  className="rounded-xl border border-border p-4"
-                >
-                  <h3 className="font-medium">
-                    {article.title}
-                  </h3>
-
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Topic: {article.topic}
-                  </p>
-
-                  <p className="text-sm text-muted-foreground">
-                    Risk: {article.risk_level}
-                  </p>
-
-                  <p className="text-sm text-muted-foreground">
-                    Threat Score:{" "}
-                    {Math.round(article.threat_score || 0)}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Topic</TableHead>
+                  <TableHead>Threat Score</TableHead>
+                  <TableHead>Similarity</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {event.articles?.map((article) => (
+                  <TableRow key={article.id}>
+                    <TableCell className="font-medium">
+                      {article.title}
+                    </TableCell>
+                    <TableCell>{article.topic}</TableCell>
+                    <TableCell>
+                      {Math.round(article.threat_score || 0)}
+                    </TableCell>
+                    <TableCell>
+                      {Math.round((article.similarity_score ?? 0) * 100)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </>
       )}

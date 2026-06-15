@@ -190,6 +190,47 @@ SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_event_entities_entity_text ON event_entities(entity_text)",
     "CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)",
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_watchlist_entities_entity_text_lower ON watchlist_entities(LOWER(entity_text))",
+    "CREATE INDEX IF NOT EXISTS idx_event_entities_entity_text_lower ON event_entities(LOWER(entity_text))",
+    "CREATE INDEX IF NOT EXISTS idx_alerts_watchlist_event_entity_lower ON alerts(watchlist_id, event_id, LOWER(entity_text))",
+    """
+    CREATE TABLE IF NOT EXISTS cases (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+        owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS case_items (
+        case_id INTEGER REFERENCES cases(id) ON DELETE CASCADE,
+        item_type VARCHAR(20) NOT NULL,
+        item_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (case_id, item_type, item_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS case_notes (
+        id SERIAL PRIMARY KEY,
+        case_id INTEGER REFERENCES cases(id) ON DELETE CASCADE,
+        note_text TEXT NOT NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_cases_owner_id ON cases(owner_id)",
+    "CREATE INDEX IF NOT EXISTS idx_cases_status ON cases(status)",
+    "CREATE INDEX IF NOT EXISTS idx_cases_updated_at ON cases(updated_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_case_items_case_id ON case_items(case_id)",
+    "CREATE INDEX IF NOT EXISTS idx_case_items_item_type ON case_items(item_type)",
+    "CREATE INDEX IF NOT EXISTS idx_case_notes_case_id ON case_notes(case_id)",
+    "CREATE INDEX IF NOT EXISTS idx_case_notes_created_by ON case_notes(created_by)",
 ]
 
 

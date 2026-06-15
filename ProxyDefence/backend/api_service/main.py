@@ -5,19 +5,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 
 from backend.api_service.routes import (
-#    alerts,
+    alerts,
     articles,
     analytics,
     auth,
+    cases,
     copilot,
    entities,
    events,
     graph,
-#    reports,
+   reports,
     search,
     semantic_search,
- #   timeline,
- #   watchlists,
+ # timeline,
+   watchlists,
 )
 from backend.api_service.routes import health
 from backend.api_service.repositories.intelligence import IntelligenceRepository
@@ -61,11 +62,11 @@ app.include_router(
     semantic_search.router
 )
 app.include_router(events.router)
-#app.include_router(events.router)
 app.include_router(entities.router)
-#app.include_router(reports.router)
-##app.include_router(watchlists.router)
-#app.include_router(alerts.router)
+app.include_router(reports.router)
+app.include_router(watchlists.router)
+app.include_router(alerts.router)
+app.include_router(cases.router)
 #app.include_router(timeline.router)
 app.include_router(copilot.router)
 app.include_router(health.router)
