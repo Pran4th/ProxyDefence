@@ -41,24 +41,28 @@ const Events = () => {
                   <h2 className="text-lg font-semibold">
                     {event.title}
                   </h2>
+
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {event.summary?.slice(0, 180)}...
+                  </p>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="rounded-full border px-3 py-1 text-xs">
-                  Topic: {event.topic}
+                  {event.topic}
                 </span>
 
                 <span className="rounded-full border px-3 py-1 text-xs">
-                  Risk level: {event.risk_level}
+                  Risk: {event.risk_level}
                 </span>
 
                 <span className="rounded-full border px-3 py-1 text-xs">
-                  Risk score: {Math.round(event.risk_score)}
+                  Score: {Math.round(event.risk_score)}
                 </span>
 
                 <span className="rounded-full border px-3 py-1 text-xs">
-                  Article count: {event.article_count}
+                  Articles: {event.article_count}
                 </span>
               </div>
             </button>

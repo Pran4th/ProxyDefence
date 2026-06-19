@@ -1,12 +1,21 @@
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import Depends
 from pydantic import BaseModel, Field
 
 from backend.api_service.repositories.intelligence import IntelligenceRepository
+from backend.api_service.security import get_current_user
 
 router = APIRouter(
     prefix="/watchlists",
     tags=["Watchlists"]
 )
+
+
+def _ensure_watchlist_access(watchlist: dict, current_user: dict) -> None:
+    if current_user.get("role") == "admin":
+        return
+    if watchlist.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Watchlist access denied")
 
 
 class WatchlistCreate(BaseModel):
@@ -22,6 +31,7 @@ class WatchlistEntityAdd(BaseModel):
 @router.get("/")
 async def list_watchlists(
     request: Request,
+    current_user: dict = Depends(get_current_user),
     owner_id: int | None = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0)
@@ -29,13 +39,15 @@ async def list_watchlists(
     """List all watchlists with optional owner filter."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
 
-    return await repo.list_watchlists(owner_id, limit, offset)
+    owner_filter = owner_id if current_user.get("role") == "admin" else current_user["id"]
+    return await repo.list_watchlists(owner_filter, limit, offset)
 
 
 @router.get("/{watchlist_id}")
 async def get_watchlist(
     watchlist_id: int,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """Get a specific watchlist with its entities."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
@@ -48,6 +60,8 @@ async def get_watchlist(
             detail="Watchlist not found"
         )
 
+    _ensure_watchlist_access(watchlist, current_user)
+
     return watchlist
 
 
@@ -55,7 +69,7 @@ async def get_watchlist(
 async def create_watchlist(
     payload: WatchlistCreate,
     request: Request,
-    owner_id: int | None = None
+    current_user: dict = Depends(get_current_user)
 ):
     """Create a new watchlist with optional initial entities."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
@@ -63,7 +77,7 @@ async def create_watchlist(
     watchlist = await repo.create_watchlist(
         name=payload.name,
         description=payload.description,
-        owner_id=owner_id,
+        owner_id=current_user["id"],
         entities=payload.entities
     )
 
@@ -73,10 +87,20 @@ async def create_watchlist(
 @router.delete("/{watchlist_id}")
 async def delete_watchlist(
     watchlist_id: int,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """Delete a watchlist and all its associated entities."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
+
+    watchlist = await repo.get_watchlist(watchlist_id)
+    if not watchlist:
+        raise HTTPException(
+            status_code=404,
+            detail="Watchlist not found"
+        )
+
+    _ensure_watchlist_access(watchlist, current_user)
 
     result = await repo.delete_watchlist(watchlist_id)
 
@@ -93,7 +117,8 @@ async def delete_watchlist(
 async def add_watchlist_entity(
     watchlist_id: int,
     payload: WatchlistEntityAdd,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """Add an entity to a watchlist."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
@@ -105,6 +130,8 @@ async def add_watchlist_entity(
             status_code=404,
             detail="Watchlist not found"
         )
+
+    _ensure_watchlist_access(watchlist, current_user)
 
     entities = await repo.add_watchlist_entity(
         watchlist_id,
@@ -121,7 +148,8 @@ async def add_watchlist_entity(
 async def remove_watchlist_entity(
     watchlist_id: int,
     entity_text: str,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """Remove an entity from a watchlist."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
@@ -133,6 +161,8 @@ async def remove_watchlist_entity(
             status_code=404,
             detail="Watchlist not found"
         )
+
+    _ensure_watchlist_access(watchlist, current_user)
 
     entities = await repo.remove_watchlist_entity(
         watchlist_id,

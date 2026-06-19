@@ -61,9 +61,9 @@ services:
     container_name: postgres-db
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
-      POSTGRES_DB: defenseintel
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./infra/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - postgres_data:/var/lib/postgresql/data
@@ -83,7 +83,7 @@ services:
     container_name: ingest-service
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      NEWS_API_KEY: "c71b58c8fa8b330a50b995521f6ba575"
+      NEWS_API_KEY: ${NEWS_API_KEY}
     ports:
       - "8001:8000"
     networks:
@@ -108,6 +108,12 @@ services:
     build: ./services/embedding-service
     container_name: embedding-service
     restart: always
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,10 +127,10 @@ services:
     container_name: database-service
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      POSTGRES_HOST: postgres-db
-      POSTGRES_DB: defenseintel
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ELASTICSEARCH_HOST: elasticsearch
     ports:
       - "8003:8000"
@@ -142,10 +148,10 @@ services:
     build: ./services/conflict-api
     container_name: conflict-api
     environment:
-      POSTGRES_HOST: postgres-db
-      POSTGRES_DB: defenseintel
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ELASTICSEARCH_HOST: elasticsearch
     ports:
       - "8004:8000"
@@ -163,10 +169,10 @@ services:
       dockerfile: services/modular-api/Dockerfile
     container_name: modular-api
     environment:
-      POSTGRES_HOST: postgres-db
-      POSTGRES_DB: defenseintel
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ELASTICSEARCH_HOST: elasticsearch
     ports:
       - "8000:8000"
@@ -189,7 +195,7 @@ services:
       context: ./services/frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:8000
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     container_name: proxydefence-frontend
     ports:
       - "3000:80"

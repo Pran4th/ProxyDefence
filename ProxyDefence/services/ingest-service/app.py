@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "c71b58c8fa8b330a50b995521f6ba575")
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
+if not NEWS_API_KEY:
+    raise RuntimeError("Missing required environment variable: NEWS_API_KEY")
 NEWS_API_URL = "https://gnews.io/api/v4/search"
 
 # --- FASTAPI APP INITIALIZATION ---

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.api_service.repositories.intelligence import IntelligenceRepository
+from backend.api_service.security import get_current_user
 
 router = APIRouter(
     prefix="/reports",
@@ -11,6 +12,7 @@ router = APIRouter(
 @router.get("/")
 async def list_reports(
     request: Request,
+    current_user: dict = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0)
 ):
@@ -21,16 +23,20 @@ async def list_reports(
         request.app.state.pg_pool
     )
 
+    created_by = None if current_user.get("role") == "admin" else current_user["id"]
+
     return await repo.list_reports(
         limit,
-        offset
+        offset,
+        created_by
     )
 
 
 @router.get("/{report_id}")
 async def get_report(
     report_id: int,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Get a specific intelligence report.
@@ -39,8 +45,11 @@ async def get_report(
         request.app.state.pg_pool
     )
 
+    created_by = None if current_user.get("role") == "admin" else current_user["id"]
+
     report = await repo.get_report(
-        report_id
+        report_id,
+        created_by
     )
 
     if not report:
@@ -56,7 +65,7 @@ async def get_report(
 async def generate_case_report(
     case_id: int,
     request: Request,
-    created_by: int | None = None
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Generate an intelligence report from a case.
@@ -65,10 +74,23 @@ async def generate_case_report(
         request.app.state.pg_pool
     )
 
+    case = await repo.get_case(case_id)
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    if current_user.get("role") != "admin" and case.get("owner_id") != current_user["id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Case access denied"
+        )
+
     try:
         report = await repo.generate_case_report(
             case_id,
-            created_by
+            current_user["id"]
         )
 
         return report

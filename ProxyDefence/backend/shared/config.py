@@ -1,13 +1,21 @@
 import os
 
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
 class Settings:
     POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
     POSTGRES_DB = os.getenv("POSTGRES_DB", "defenseintel")
-    POSTGRES_USER = os.getenv("POSTGRES_USER", "admin")
-    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "admin123")
+    POSTGRES_USER = _required_env("POSTGRES_USER")
+    POSTGRES_PASSWORD = _required_env("POSTGRES_PASSWORD")
 
     ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "elasticsearch")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "proxydefence-dev-secret")
+    JWT_SECRET_KEY = _required_env("JWT_SECRET_KEY")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     CORS_ORIGINS = [

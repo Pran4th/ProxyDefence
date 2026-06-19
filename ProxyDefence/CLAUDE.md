@@ -174,6 +174,5 @@ curl http://localhost:8001/fetch-real-news
 * Elasticsearch runs with security disabled (single-node dev mode)
 * All services communicate over the `proxy_net` Docker bridge network
 * The `services/frontend/` directory is a placeholder - use `frontend/` at root instead
-* Frontend uses Supabase credentials in `.env` but backend connects directly to PostgreSQL
 
 ---

@@ -9,11 +9,13 @@ model = TextEmbedding(
     model_name="BAAI/bge-small-en-v1.5"
 )
 
-DB_HOST = os.getenv("DB_HOST", "postgres-db")
+DB_HOST = os.getenv("DB_HOST", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "defenseintel")
-DB_USER = os.getenv("DB_USER", "admin")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "admin123")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+if not DB_USER or not DB_PASSWORD:
+    raise RuntimeError("Missing required database credentials")
 
 pool = None
 

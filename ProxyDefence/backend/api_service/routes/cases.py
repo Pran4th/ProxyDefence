@@ -1,12 +1,20 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.api_service.repositories.intelligence import IntelligenceRepository
+from backend.api_service.security import get_current_user
 
 router = APIRouter(
     prefix="/cases",
     tags=["Cases"]
 )
+
+
+def _ensure_case_access(case: dict, current_user: dict) -> None:
+    if current_user.get("role") == "admin":
+        return
+    if case.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Case access denied")
 
 
 class CaseCreate(BaseModel):
@@ -27,6 +35,7 @@ class CaseNoteAdd(BaseModel):
 @router.get("/")
 async def list_cases(
     request: Request,
+    current_user: dict = Depends(get_current_user),
     owner_id: int | None = None,
     status: str | None = None,
     limit: int = Query(50, ge=1, le=500),
@@ -35,14 +44,15 @@ async def list_cases(
     """List all cases with optional owner and status filtering."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
 
-    return await repo.list_cases(owner_id, status, limit, offset)
+    owner_filter = owner_id if current_user.get("role") == "admin" else current_user["id"]
+    return await repo.list_cases(owner_filter, status, limit, offset)
 
 
 @router.post("/")
 async def create_case(
     payload: CaseCreate,
     request: Request,
-    owner_id: int | None = None
+    current_user: dict = Depends(get_current_user)
 ):
     """Create a new investigation case."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
@@ -51,7 +61,7 @@ async def create_case(
         case = await repo.create_case(
             title=payload.title,
             description=payload.description,
-            owner_id=owner_id,
+            owner_id=current_user["id"],
             priority=payload.priority
         )
 
@@ -67,7 +77,8 @@ async def create_case(
 @router.get("/{case_id}")
 async def get_case(
     case_id: int,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """Get a specific case with items and notes."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
@@ -80,6 +91,8 @@ async def get_case(
             detail="Case not found"
         )
 
+    _ensure_case_access(case, current_user)
+
     return case
 
 
@@ -87,10 +100,20 @@ async def get_case(
 async def add_case_item(
     case_id: int,
     payload: CaseItemAdd,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """Add an item (alert, event, article, entity) to a case."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
+
+    case = await repo.get_case(case_id)
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    _ensure_case_access(case, current_user)
 
     try:
         result = await repo.add_case_item(
@@ -113,10 +136,20 @@ async def remove_case_item(
     case_id: int,
     item_type: str,
     item_id: int,
-    request: Request
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """Remove an item from a case."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
+
+    case = await repo.get_case(case_id)
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    _ensure_case_access(case, current_user)
 
     try:
         result = await repo.remove_case_item(
@@ -138,11 +171,21 @@ async def remove_case_item(
 async def list_case_notes(
     case_id: int,
     request: Request,
+    current_user: dict = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0)
 ):
     """List notes for a specific case."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
+
+    case = await repo.get_case(case_id)
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    _ensure_case_access(case, current_user)
 
     return await repo.list_case_notes(case_id, limit, offset)
 
@@ -152,15 +195,24 @@ async def add_case_note(
     case_id: int,
     payload: CaseNoteAdd,
     request: Request,
-    created_by: int | None = None
+    current_user: dict = Depends(get_current_user)
 ):
     """Add a note to a case."""
     repo = IntelligenceRepository(request.app.state.pg_pool)
 
+    case = await repo.get_case(case_id)
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    _ensure_case_access(case, current_user)
+
     note = await repo.add_case_note(
         case_id,
         payload.note,
-        created_by
+        current_user["id"]
     )
 
     return note

@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -22,10 +22,10 @@ from backend.api_service.routes import (
 )
 from backend.api_service.routes import health
 from backend.api_service.repositories.intelligence import IntelligenceRepository
+from backend.api_service.security import get_current_user
 from backend.shared.db_pool import close_pg_pool, get_pg_pool
 from backend.shared.schema_bootstrap import ensure_application_schema
 from backend.shared.elastic_client import close_es_client, get_es_client
-from backend.shared.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,23 +52,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Register routers
 app.include_router(auth.router)
-app.include_router(articles.router)
-app.include_router(analytics.router)
-app.include_router(search.router)
-app.include_router(graph.router)
-app.include_router(
-    semantic_search.router
+
+protected_routers = (
+    articles.router,
+    analytics.router,
+    search.router,
+    graph.router,
+    semantic_search.router,
+    events.router,
+    entities.router,
+    reports.router,
+    watchlists.router,
+    alerts.router,
+    cases.router,
+    copilot.router,
 )
-app.include_router(events.router)
-app.include_router(entities.router)
-app.include_router(reports.router)
-app.include_router(watchlists.router)
-app.include_router(alerts.router)
-app.include_router(cases.router)
-#app.include_router(timeline.router)
-app.include_router(copilot.router)
+
+for router in protected_routers:
+    app.include_router(router, dependencies=[Depends(get_current_user)])
+
 app.include_router(health.router)
 
 
@@ -79,8 +82,10 @@ async def audit_mutating_requests(request: Request, call_next):
     if request.method in {"POST", "PUT", "PATCH", "DELETE"} and hasattr(request.app.state, "pg_pool"):
         try:
             repository = IntelligenceRepository(request.app.state.pg_pool)
+            current_user = getattr(request.state, "current_user", None)
+            user_id = current_user.get("id") if isinstance(current_user, dict) else None
             await repository.audit(
-                None,
+                user_id,
                 f"{request.method} {request.url.path}",
                 request.url.path,
                 {"status_code": response.status_code},

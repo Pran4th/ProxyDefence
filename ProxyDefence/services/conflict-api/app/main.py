@@ -26,9 +26,12 @@ app.add_middleware(
 POSTGRES_CONFIG = {
     "host": os.getenv("POSTGRES_HOST", "postgres"),
     "database": os.getenv("POSTGRES_DB", "defenseintel"),
-    "user": os.getenv("POSTGRES_USER", "admin"),
-    "password": os.getenv("POSTGRES_PASSWORD", "admin123"),
+    "user": os.getenv("POSTGRES_USER"),
+    "password": os.getenv("POSTGRES_PASSWORD"),
 }
+
+if not POSTGRES_CONFIG["user"] or not POSTGRES_CONFIG["password"]:
+    raise RuntimeError("Missing required PostgreSQL credentials")
 
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "elasticsearch")
 

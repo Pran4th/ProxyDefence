@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from backend.api_service.repositories.intelligence import IntelligenceRepository
+from backend.api_service.security import require_admin
 
 router = APIRouter(
     prefix="/alerts",
@@ -72,7 +73,7 @@ async def update_alert_status(
         )
 
 
-@router.post("/generate")
+@router.post("/generate", dependencies=[Depends(require_admin)])
 async def generate_alerts(
     request: Request
 ):

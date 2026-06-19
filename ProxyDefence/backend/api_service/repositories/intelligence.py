@@ -964,13 +964,20 @@ class IntelligenceRepository:
 
     async def get_report(
         self,
-        report_id: int
+        report_id: int,
+        created_by: int | None = None
     ) -> dict[str, Any] | None:
         """Get a specific report."""
         async with self.pool.acquire() as conn:
             report = await conn.fetchrow(
-                "SELECT * FROM reports WHERE id = $1",
-                report_id
+                """
+                SELECT *
+                FROM reports
+                WHERE id = $1
+                  AND ($2::int IS NULL OR created_by = $2)
+                """,
+                report_id,
+                created_by,
             )
             
             if report is None:
@@ -981,7 +988,8 @@ class IntelligenceRepository:
     async def list_reports(
         self,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        created_by: int | None = None,
     ) -> list[dict[str, Any]]:
         """List all reports ordered by creation date."""
         async with self.pool.acquire() as conn:
@@ -989,11 +997,13 @@ class IntelligenceRepository:
                 """
                 SELECT *
                 FROM reports
+                WHERE ($3::int IS NULL OR created_by = $3)
                 ORDER BY created_at DESC
                 LIMIT $1 OFFSET $2
                 """,
                 limit,
                 offset,
+                created_by,
             )
 
         return [record_to_dict(row) for row in rows]
