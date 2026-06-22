@@ -9,8 +9,11 @@ from typing import Any, Optional
 import psycopg2
 from confluent_kafka import Consumer
 from elasticsearch import Elasticsearch
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from psycopg2 import OperationalError as Psycopg2OpError
+from psycopg2 import pool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +28,10 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 if not POSTGRES_USER or not POSTGRES_PASSWORD:
     raise RuntimeError("Missing required PostgreSQL credentials")
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "elasticsearch")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+if not JWT_SECRET_KEY:
+    raise RuntimeError("Missing required JWT secret")
 
 consumer = Consumer(
     {
@@ -35,24 +42,40 @@ consumer = Consumer(
     }
 )
 
+bearer_scheme = HTTPBearer(auto_error=False)
 
-def get_postgres_connection(max_retries: int = 10, delay: int = 3):
-    for attempt in range(max_retries):
-        try:
-            conn = psycopg2.connect(
-                host=POSTGRES_HOST,
-                database=POSTGRES_DB,
-                user=POSTGRES_USER,
-                password=POSTGRES_PASSWORD,
-                connect_timeout=5,
-            )
-            conn.autocommit = False
-            return conn
-        except Psycopg2OpError as exc:
-            logger.warning("PostgreSQL connection attempt %s/%s failed: %s", attempt + 1, max_retries, exc)
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(delay)
+db_pool = None
+consumer_running = False
+consumer_restart_count = 0
+last_consumer_error = None
+
+def init_db_pool(min_size: int = 5, max_size: int = 20) -> None:
+    global db_pool
+    try:
+        db_pool = pool.SimpleConnectionPool(
+            min_size,
+            max_size,
+            host=POSTGRES_HOST,
+            database=POSTGRES_DB,
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            connect_timeout=5,
+        )
+        logger.info("Database connection pool initialized: min=%d, max=%d", min_size, max_size)
+    except Exception as exc:
+        logger.exception("Failed to initialize connection pool: %s", exc)
+        raise
+
+
+def get_postgres_connection():
+    if db_pool is None:
+        raise RuntimeError("Database pool not initialized")
+    return db_pool.getconn()
+
+
+def return_postgres_connection(conn) -> None:
+    if db_pool is not None:
+        db_pool.putconn(conn)
 
 
 def get_elasticsearch_client(max_retries: int = 10, delay: int = 3) -> Optional[Elasticsearch]:
@@ -76,6 +99,71 @@ def parse_datetime(value: Optional[str]):
         return datetime.fromisoformat(normalized)
     except ValueError:
         return None
+
+
+def get_admin_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, Any]:
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+        )
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+
+    conn = get_postgres_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, email, username, role FROM users WHERE id = %s",
+                (user_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+            user = {
+                "id": row[0],
+                "email": row[1],
+                "username": row[2],
+                "role": row[3],
+            }
+            if user["role"] != "admin":
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+            return user
+    finally:
+        return_postgres_connection(conn)
+
+
+def validate_rebuild_prerequisites(cur) -> None:
+    required_tables = ["processed_articles", "events", "event_articles", "event_entities"]
+    missing_tables = []
+
+    for table_name in required_tables:
+        cur.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
+        if cur.fetchone()[0] is None:
+            missing_tables.append(table_name)
+
+    if missing_tables:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Missing required tables: {', '.join(missing_tables)}",
+        )
+
+
+def get_pool_stats() -> dict[str, int]:
+    if db_pool is None:
+        return {"initialized": False, "available": 0, "total": 0}
+    return {
+        "initialized": True,
+        "available": db_pool._pool.__len__() if hasattr(db_pool, "_pool") else 0,
+        "total": db_pool._maxconn if hasattr(db_pool, "_maxconn") else 0,
+    }
 
 
 def create_tables() -> None:
@@ -278,7 +366,7 @@ def create_tables() -> None:
         conn.commit()
         logger.info("Database schema verified")
     finally:
-        conn.close()
+        return_postgres_connection(conn)
 
 
 def upsert_article(data: dict[str, Any]) -> int:
@@ -349,7 +437,7 @@ def upsert_article(data: dict[str, Any]) -> int:
         conn.commit()
         return article_db_id
     finally:
-        conn.close()
+        return_postgres_connection(conn)
 
 
 def replace_related_records(article_db_id: int, data: dict[str, Any]) -> None:
@@ -414,7 +502,7 @@ def replace_related_records(article_db_id: int, data: dict[str, Any]) -> None:
                 )
         conn.commit()
     finally:
-        conn.close()
+        return_postgres_connection(conn)
 
 
 def _risk_level(score: float) -> str:
@@ -435,8 +523,10 @@ def _token_similarity(left: str, right: str) -> float:
     return len(left_tokens & right_tokens) / max(len(left_tokens | right_tokens), 1)
 
 
-def update_event_intelligence(article_db_id: int) -> None:
-    conn = get_postgres_connection()
+def update_event_intelligence(article_db_id: int, conn=None) -> None:
+    owns_connection = conn is None
+    if conn is None:
+        conn = get_postgres_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -449,7 +539,6 @@ def update_event_intelligence(article_db_id: int) -> None:
             )
             article = cur.fetchone()
             if not article:
-                conn.rollback()
                 return
 
             columns = [desc[0] for desc in cur.description]
@@ -746,12 +835,15 @@ END,
                         ),
                     )
 
-        conn.commit()
+        if owns_connection:
+            conn.commit()
     except Exception:
-        conn.rollback()
+        if owns_connection:
+            conn.rollback()
         raise
     finally:
-        conn.close()
+        if owns_connection:
+            return_postgres_connection(conn)
 
 
 def index_article(data: dict[str, Any]) -> None:
@@ -804,25 +896,67 @@ def process_message(data: dict[str, Any]) -> None:
     )
 
 def start_kafka_consumer() -> None:
+    global consumer_running, last_consumer_error
+
+    consumer_running = True
+
     logger.info("Database Service Kafka consumer starting...")
+
     try:
         consumer.subscribe(["processed_articles"])
         logger.info("Subscribed to processed_articles topic")
 
         while True:
             msg = consumer.poll(1.0)
+
             if msg is None:
                 continue
+
             if msg.error():
                 logger.error("Consumer error: %s", msg.error())
                 continue
 
-            payload = json.loads(msg.value().decode("utf-8"))
+            payload = json.loads(
+                msg.value().decode("utf-8")
+            )
+
             process_message(payload)
+
     except Exception as exc:
-        logger.exception("Kafka consumer crashed: %s", exc)
+        consumer_running = False
+        last_consumer_error = str(exc)
+
+        logger.exception(
+            "Kafka consumer crashed: %s",
+            exc
+        )
+
+        raise
+
     finally:
         consumer.close()
+
+
+def run_consumer_supervisor() -> None:
+    global consumer_restart_count
+    global consumer_running
+    global last_consumer_error
+
+    while True:
+        try:
+            start_kafka_consumer()
+
+        except Exception as exc:
+            consumer_restart_count += 1
+            consumer_running = False
+            last_consumer_error = str(exc)
+
+            logger.error(
+                "Consumer restart #%s in 5 seconds",
+                consumer_restart_count
+            )
+
+            time.sleep(5)
 
 
 def fetch_articles(limit: int = 20, offset: int = 0, sentiment: Optional[str] = None):
@@ -852,7 +986,7 @@ def fetch_articles(limit: int = 20, offset: int = 0, sentiment: Optional[str] = 
             columns = [desc[0] for desc in cur.description]
         return serialize_rows(columns, rows)
     finally:
-        conn.close()
+        return_postgres_connection(conn)
 
 
 def serialize_rows(columns, rows):
@@ -868,8 +1002,12 @@ def serialize_rows(columns, rows):
 
 @app.on_event("startup")
 def startup_event():
+    init_db_pool()
     create_tables()
-    threading.Thread(target=start_kafka_consumer, daemon=True).start()
+    threading.Thread(
+    target=run_consumer_supervisor,
+    daemon=True
+).start()
 
 
 @app.get("/")
@@ -881,14 +1019,37 @@ def read_root():
 def health_check():
     try:
         conn = get_postgres_connection()
-        conn.close()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        return_postgres_connection(conn)
         es = get_elasticsearch_client()
         if es is None:
             raise RuntimeError("Elasticsearch unavailable")
         es.info()
-        return {"status": "healthy", "postgres": "connected", "elasticsearch": "connected", "kafka": "consumer_running"}
+        pool_stats = get_pool_stats()
+        return {
+            "status": "healthy",
+            "postgres": "connected",
+            "elasticsearch": "connected",
+            "kafka": {
+    "running": consumer_running,
+    "restart_count": consumer_restart_count,
+    "last_error": last_consumer_error,
+},
+            "pool": pool_stats,
+        }
     except Exception as exc:
-        return {"status": "unhealthy", "error": str(exc)}
+        pool_stats = get_pool_stats()
+        return {
+            "status": "unhealthy",
+            "error": str(exc),
+            "pool": pool_stats,
+            "kafka": {
+    "running": consumer_running,
+    "restart_count": consumer_restart_count,
+    "last_error": last_consumer_error,
+},
+        }
 
 
 @app.get("/api/articles")
@@ -899,60 +1060,46 @@ def get_articles(limit: int = 20, offset: int = 0, sentiment: Optional[str] = No
         raise HTTPException(status_code=500, detail=f"Database error: {exc}") from exc
 
 @app.post("/rebuild-events")
-async def rebuild_events():
+async def rebuild_events(current_user: dict[str, Any] = Depends(get_admin_user)):
 
     conn = get_postgres_connection()
 
     try:
+        with conn:
+            with conn.cursor() as cur:
+                validate_rebuild_prerequisites(cur)
 
-        with conn.cursor() as cur:
+                cur.execute("DELETE FROM event_entities")
+                cur.execute("DELETE FROM event_articles")
+                cur.execute("DELETE FROM events")
 
-            cur.execute("""
-                DELETE FROM event_entities;
-                DELETE FROM event_articles;
-                DELETE FROM events;
-            """)
+                cur.execute("""
+                    SELECT id
+                    FROM processed_articles
+                    ORDER BY id
+                """)
 
-        conn.commit()
+                article_ids = [
+                    row[0]
+                    for row in cur.fetchall()
+                ]
 
-        with conn.cursor() as cur:
+            rebuilt = 0
 
-            cur.execute("""
-                SELECT id
-                FROM processed_articles
-                ORDER BY id
-            """)
-
-            article_ids = [
-                row[0]
-                for row in cur.fetchall()
-            ]
-
-        rebuilt = 0
-
-        for article_id in article_ids:
-
-            try:
-
+            for article_id in article_ids:
                 update_event_intelligence(
-                    article_id
+                    article_id,
+                    conn=conn,
                 )
-
                 rebuilt += 1
-
-            except Exception as e:
-
-                logger.error(
-                    f"Failed article {article_id}: {e}"
-                )
 
         return {
             "status": "success",
-            "articles_processed": rebuilt
+            "articles_processed": rebuilt,
         }
 
     finally:
-        conn.close()
+        return_postgres_connection(conn)
 @app.get("/api/analytics/summary")
 def get_analytics_summary():
     conn = get_postgres_connection()
@@ -978,7 +1125,7 @@ def get_analytics_summary():
             "sentiment_distribution": sentiment_distribution,
         }
     finally:
-        conn.close()
+        return_postgres_connection(conn)
 
 
 @app.get("/api/search")
@@ -1020,4 +1167,4 @@ def get_article(article_id: int):
             columns = [desc[0] for desc in cur.description]
         return serialize_rows(columns, [row])[0]
     finally:
-        conn.close()
+        return_postgres_connection(conn)

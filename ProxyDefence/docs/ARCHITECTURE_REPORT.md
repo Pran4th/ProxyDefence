@@ -27,7 +27,6 @@ The stack is orchestrated by `docker-compose.yml` over a single bridge network `
 | `ml-service` | `services/ml-service/app.py` | `8002:8000` | Consumes `raw_articles`; runs NER (Transformer `dbmdz/bert-large-cased` → spaCy `en_core_web_sm` fallback), sentiment (`distilbert-base-uncased-sst-2-english`), topic classification (keyword), threat/risk scoring, relationship inference, keyword extraction, dedupe‑key hashing. Publishes enriched payload. Endpoints: `/`, `/health` | `confluent-kafka`, `spacy`, `transformers`, `torch` (transitive) | **Consumer** `raw_articles` (group `ml-service-group`) **+ Producer** → `processed_articles` |
 | `database-service` | `services/database-service/app.py` | `8003:8000` | Consumes `processed_articles`; upserts into Postgres (idempotent on `dedupe_key`), replaces entities/sentiments/relationships, **runs event clustering + entity‑profile + alert generation inline**, and indexes the doc in Elasticsearch. Also exposes its own read APIs (`/api/articles`, `/api/analytics/summary`, `/api/search`, `/api/articles/{id}`, `/rebuild-events`). | `confluent-kafka`, `psycopg2`, `elasticsearch` (sync) | **Consumer** `processed_articles` (group `db-service-group`) |
 | `embedding-service` | `services/embedding-service/app.py` | `8005:8000` | Generates & serves vector embeddings using **`fastembed`** model `BAAI/bge-small-en-v1.5`. Creates `article_embeddings(article_id, embedding vector)` table on demand. Endpoints: `/search` (cosine via `<=>`), `/generate` (batch backfill), `/health` | `fastembed`, `asyncpg`, `pgvector` | None (pull model — invoked on demand) |
-| `conflict-api` | `services/conflict-api/app/main.py` | `8004:8000` | **Legacy/legacy‑parallel API.** Currently only configures CORS + opens `asyncpg` pool and `AsyncElasticsearch` on startup — its route body is empty (see Technical Debt §7). | `asyncpg`, `AsyncElasticsearch` | None |
 | `modular-api` | `backend/api_service/main.py` (built via `services/modular-api/Dockerfile`, context `.`) | `8000:8000` | **Primary API gateway for the frontend.** Async FastAPI with pooled `asyncpg` + `AsyncElasticsearch`, lifespan‑managed schema bootstrap, JWT auth, audit middleware, and 13 route modules. Only service with a Docker healthcheck. | `asyncpg`, `AsyncElasticsearch`, `python-jose`, `passlib[bcrypt]`, `httpx`, `email-validator` | None (synchronous read/write gateway) |
 
 ### 1.3 Frontend Service
@@ -40,7 +39,7 @@ The stack is orchestrated by `docker-compose.yml` over a single bridge network `
 
 ### Port Summary (external access)
 
-| 8000 modular-api | 8001 ingest | 8002 ml | 8003 database | 8004 conflict-api | 8005 embedding | 3000 frontend | 5432 pg | 9200 es | 9092 kafka |
+| 8000 modular-api | 8001 ingest | 8002 ml | 8003 database | 8005 embedding | 3000 frontend | 5432 pg | 9200 es | 9092 kafka |
 
 ---
 
@@ -247,7 +246,7 @@ flowchart LR
 
 ## 4. API Analysis
 
-Two HTTP API surfaces exist. **The frontend talks to `modular-api` (`:8000`)** (per `VITE_API_URL=http://localhost:8000` in compose). The database‑service's `/api/*` endpoints and `conflict-api` are parallel/legacy.
+Two HTTP API surfaces exist. **The frontend talks to `modular-api` (`:8000`)** (per `VITE_API_URL=http://localhost:8000` in compose). The database‑service's `/api/*` endpoints are parallel/legacy.
 
 ### 4.1 modular-api (`backend/api_service`) — authoritative surface
 
@@ -287,17 +286,13 @@ Repository layer: `backend/api_service/repositories/intelligence.py` (`Intellige
 | `CopilotRequest` | `question: str` |
 | (DTO stubs in `dto.py`) | `PageParams`, `ReportGenerateRequest`, `WatchlistCreateRequest`, `AlertCreateRequest`, `CopilotQueryRequest` — **defined but largely unused** (routes define their own inline models). |
 
-Successful responses are mostly raw dicts (`record_to_dict` of asyncpg `Record`s). The committed `openapi.json` is a **stale snapshot** that predates cases/copilot/alerts/watchlists/reports routers (it lists only auth, articles, analytics, search, graph, events, health) — §7.
+Successful responses are mostly raw dicts (`record_to_dict` of asyncpg `Record`s). The committed `openapi.json` is regenerated from the live gateway so it tracks the current router set — §7.
 
 ### 4.2 database-service API (`:8003`) — parallel/legacy
 
 `GET /`, `GET /health`, `GET /api/articles`, `GET /api/articles/{id}`, `GET /api/analytics/summary`, `GET /api/search`, `POST /rebuild-events` (wipes & re‑clusters all events). The frontend does **not** call these (it uses modular-api), but they remain live.
 
-### 4.3 conflict-api (`:8004`) — vestigial
-
-`main.py` only wires CORS + DB/ES clients on startup. **No routes are registered** — every endpoint 404s. Dead code (§7).
-
-### 4.4 ingest-service / ml-service / embedding-service HTTP
+### 4.3 ingest-service / ml-service / embedding-service HTTP
 
 - ingest: `GET /`, `GET /health` (Kafka probe), `GET /fetch-real-news`.
 - ml: `GET /`, `GET /health` (reports model load state).
@@ -373,7 +368,6 @@ flowchart TB
 
         subgraph API Layer
             MA[modular-api :8000<br/>FastAPI gateway<br/>JWT + audit + 13 routers]
-            CA[conflict-api :8004<br/>VESTIGIAL — no routes]
             DBS[database-service :8003<br/>Kafka consumer + legacy /api]
         end
 
@@ -445,10 +439,10 @@ sequenceDiagram
 ### Critical / Correctness
 
 1. **Triplicated, drifted schema definitions.** `infra/sql/init.sql` (3 tables + relationships), `backend/shared/schema_bootstrap.py` (18 statements, authoritative), and `services/database-service/app.py::create_tables()` (similar but separately maintained) all define the schema. `article_embeddings` exists **only** at runtime (embedding-service). High risk of drift; e.g. `extracted_entities.article_id` ON DELETE behaviour differs across sources. **Recommendation:** single source of truth (Alembic migrations) consumed by all services.
-2. **`openapi.json` is stale.** Committed spec omits alerts, watchlists, cases, reports, copilot, entities, semantic-search, search `/`, analytics `/dashboard*` `/threat-trends` `/timeseries` `/topics` `/entities` `/graph`. Consumers codegenning from it get an incomplete client.
+2. **`openapi.json` is regenerated from the live gateway.** The committed spec now includes alerts, watchlists, cases, reports, copilot, entities, semantic-search, search `/`, analytics `/dashboard*` `/threat-trends` `/timeseries` `/topics` `/entities` `/graph`, so generated clients can stay in sync with the API surface.
 3. **Auth is largely unenforced.** Only `/auth/me` uses `get_current_user`. Every analytics/articles/events/cases/watchlists/alerts/reports/graph/copilot route is anonymous. The audit middleware records `user_id=None` for all mutations. JWT infrastructure exists but isn't applied.
 4. **Secrets committed to the repo / compose.** GNews `NEWS_API_KEY` is hard‑coded in `docker-compose.yml` and as a default in `ingest-service/app.py`. Postgres creds `admin/admin123` and `JWT_SECRET_KEY="proxydefence-dev-secret"` are defaults. ES runs with `xpack.security.enabled=false`.
-5. **Dead/parallel services still in the stack.** `conflict-api` registers no routes — pure overhead, a container that can only 404. `database-service`'s HTTP API duplicates modular-api's surface. The git status shows `backend/api_service/routes/{alerts,copilot,entities,events,reports,timeline,watchlists}.py` were recently deleted then re‑added — ownership boundary is unstable.
+5. **Dead/parallel services still in the stack.** `database-service`'s HTTP API duplicates modular-api's surface. The git status shows `backend/api_service/routes/{alerts,copilot,entities,events,reports,timeline,watchlists}.py` were recently deleted then re‑added — ownership boundary is unstable.
 
 ### Reliability
 
@@ -497,7 +491,7 @@ Ranked by expected impact under ingest/query load:
 - **Service inventory / ports / deps:** `docker-compose.yml`, `services/*/Dockerfile`, `services/*/requirements.txt`.
 - **Schema (18 tables, 17 FKs, 44 indexes):** live `information_schema` via `mcp__postgres__query` (matches `schema_bootstrap.py`).
 - **Kafka topics/groups:** `services/ingest-service/app.py:80,413`, `services/ml-service/app.py:413,434`, `services/database-service/app.py:807`.
-- **API surface:** `backend/api_service/main.py` + `backend/api_service/routes/*.py`; stale `openapi.json` cross‑checked.
+- **API surface:** `backend/api_service/main.py` + `backend/api_service/routes/*.py`; regenerated `openapi.json` cross‑checked.
 - **Frontend wiring:** `services/frontend/src/lib/api.ts`, `App.tsx`, `Dockerfile`, `nginx.conf`.
 
 *No source, schema, or configuration files were modified during this analysis.*

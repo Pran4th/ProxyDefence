@@ -132,6 +132,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ELASTICSEARCH_HOST: elasticsearch
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
     ports:
       - "8003:8000"
     networks:
@@ -139,25 +141,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-
-  conflict-api:
-    build: ./services/conflict-api
-    container_name: conflict-api
-    environment:
-      POSTGRES_HOST: ${POSTGRES_HOST}
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      ELASTICSEARCH_HOST: elasticsearch
-    ports:
-      - "8004:8000"
-    networks:
-      - proxy_net
-    depends_on:
       postgres:
         condition: service_healthy
       elasticsearch:

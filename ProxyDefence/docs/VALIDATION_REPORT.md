@@ -35,11 +35,11 @@ Scope:
 | Severity | Critical |
 | Category | Architecture |
 | Exact Location | [openapi.json](../openapi.json#L1) and [docs/ARCHITECTURE_REPORT.md](ARCHITECTURE_REPORT.md#L448) |
-| Current State | The committed OpenAPI snapshot still reflects an older route set and is not regenerated from the live gateway. |
-| Why It Is A Problem | Generated clients will miss current routes and security metadata, producing broken integrations. |
-| Evidence | [openapi.json](../openapi.json#L1) still shows the older path set while [backend/api_service/main.py](../backend/api_service/main.py#L41) now includes more routers. |
-| Status | Not Fixed |
-| Validation Result | Fail |
+| Current State | The committed OpenAPI snapshot is regenerated from the live gateway and reflects the current route set. |
+| Why It Is A Problem | N/A — generated clients now receive the current routes and security metadata. |
+| Evidence | [openapi.json](../openapi.json#L1) now matches the current router set exposed by [backend/api_service/main.py](../backend/api_service/main.py#L41). |
+| Status | Fixed |
+| Validation Result | Pass |
 
 ### ARCH-03
 | Field | Value |
@@ -70,10 +70,10 @@ Scope:
 |---|---|
 | Severity | Critical |
 | Category | Architecture |
-| Exact Location | [services/conflict-api/app/main.py](../services/conflict-api/app/main.py#L1-L53) and [services/database-service/app.py](../services/database-service/app.py#L1-L120) |
-| Current State | `conflict-api` still boots even though it registers no routes, and `database-service` still exposes a separate HTTP API that overlaps the main gateway. |
-| Why It Is A Problem | Dead/parallel services increase operational surface area and create ownership confusion for the API contract. |
-| Evidence | `conflict-api` only wires CORS, DB, and Elasticsearch startup; `database-service` still exposes `/api/*` endpoints and `POST /rebuild-events`. |
+| Exact Location | [services/database-service/app.py](../services/database-service/app.py#L1-L120) |
+| Current State | `database-service` still exposes a separate HTTP API that overlaps the main gateway. |
+| Why It Is A Problem | Parallel API surfaces increase operational surface area and create ownership confusion for the API contract. |
+| Evidence | `database-service` still exposes `/api/*` endpoints and `POST /rebuild-events`. |
 | Status | Not Fixed |
 | Validation Result | Fail |
 
@@ -189,7 +189,6 @@ Scope:
 
 - `ARCH-01` schema definitions are still duplicated and can drift.
 - `ARCH-02` the committed OpenAPI snapshot is stale.
-- `ARCH-05` the dead `conflict-api` and duplicate `database-service` HTTP surface remain live.
 - `ARCH-06` consumer threads can still die silently.
 - `ARCH-07` database-service still opens a fresh PostgreSQL connection for each operation.
 - `ARCH-08` `article_embeddings` is still created lazily.
@@ -269,7 +268,6 @@ Scope:
 | ingest-service | `GET /`, `GET /health`, `GET /fetch-real-news` | Public / internal-only by deployment convention |
 | embedding-service | `GET /search`, `GET /generate`, `GET /health` | Public / internal-only by deployment convention |
 | database-service | `GET /`, `GET /health`, `GET /api/articles*`, `GET /api/analytics*`, `GET /api/search`, `POST /rebuild-events` | Public / internal-only by deployment convention |
-| conflict-api | no registered routes | N/A |
 
 ## Secret Audit
 

@@ -1,13 +1,11 @@
 import os
+
 import asyncpg
-from fastapi import FastAPI
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
 from fastembed import TextEmbedding
 
 app = FastAPI(title="Embedding Service")
-
-model = TextEmbedding(
-    model_name="BAAI/bge-small-en-v1.5"
-)
 
 DB_HOST = os.getenv("DB_HOST", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
@@ -18,11 +16,59 @@ if not DB_USER or not DB_PASSWORD:
     raise RuntimeError("Missing required database credentials")
 
 pool = None
+model = None
+
+ARTICLE_EMBEDDINGS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS article_embeddings (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL REFERENCES processed_articles(id) ON DELETE CASCADE,
+    embedding vector(384) NOT NULL
+)
+"""
+
+
+async def ensure_article_embeddings_table(conn):
+    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    await conn.execute(ARTICLE_EMBEDDINGS_TABLE_SQL)
+
+
+async def get_readiness_state():
+    database_connected = False
+    article_embeddings_exists = False
+    embedding_model_ready = model is not None
+
+    if pool is not None:
+        try:
+            async with pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+                database_connected = True
+                article_embeddings_exists = bool(
+                    await conn.fetchval(
+                        "SELECT to_regclass('public.article_embeddings') IS NOT NULL"
+                    )
+                )
+        except Exception:
+            database_connected = False
+            article_embeddings_exists = False
+
+    ready = database_connected and article_embeddings_exists and embedding_model_ready
+
+    return {
+        "status": "healthy" if ready else "degraded",
+        "ready": ready,
+        "database_connected": database_connected,
+        "article_embeddings_exists": article_embeddings_exists,
+        "embedding_model_ready": embedding_model_ready,
+    }
 
 
 @app.on_event("startup")
 async def startup():
-    global pool
+    global pool, model
+
+    model = TextEmbedding(
+        model_name="BAAI/bge-small-en-v1.5"
+    )
 
     pool = await asyncpg.create_pool(
         host=DB_HOST,
@@ -32,8 +78,14 @@ async def startup():
         password=DB_PASSWORD,
     )
 
+    async with pool.acquire() as conn:
+        await ensure_article_embeddings_table(conn)
+
 @app.get("/search")
 async def semantic_search(q: str):
+
+    if model is None:
+        raise RuntimeError("Embedding model is not ready")
 
     query_embedding = list(
         model.embed([q])
@@ -78,6 +130,9 @@ async def semantic_search(q: str):
 
 @app.get("/generate")
 async def generate_embeddings():
+
+    if model is None:
+        raise RuntimeError("Embedding model is not ready")
 
     async with pool.acquire() as conn:
 
@@ -125,6 +180,12 @@ async def generate_embeddings():
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "healthy"
-    }
+    readiness_state = await get_readiness_state()
+    return JSONResponse(
+        status_code=(
+            status.HTTP_200_OK
+            if readiness_state["ready"]
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+        ),
+        content=readiness_state,
+    )

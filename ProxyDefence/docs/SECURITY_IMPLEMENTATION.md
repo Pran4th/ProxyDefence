@@ -17,8 +17,6 @@ This phase removes hardcoded secrets, externalizes runtime configuration, enforc
 - [services/ingest-service/app.py](../services/ingest-service/app.py)
 - [services/database-service/app.py](../services/database-service/app.py)
 - [services/embedding-service/app.py](../services/embedding-service/app.py)
-- [services/conflict-api/app/main.py](../services/conflict-api/app/main.py)
-- [services/conflict-api/app/database.py](../services/conflict-api/app/database.py)
 - [docker-compose.yml](../docker-compose.yml)
 - [.gitignore](../.gitignore)
 - [.env.example](../.env.example)

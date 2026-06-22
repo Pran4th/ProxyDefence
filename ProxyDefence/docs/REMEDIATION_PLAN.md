@@ -125,15 +125,6 @@ Effort is given in **engineer‑weeks (EW)** at nominal velocity; ranges reflect
 - **Estimated Effort:** 2 EW.
 - **Dependencies:** None; unblocks A3, R5, SC2.
 
-### A2 — `conflict-api` is vestigial (no routes)
-- **Root Cause:** `services/conflict-api/app/main.py` only wires CORS + opens DB/ES clients; no router is registered. Container ships, consumes resources, 404s everything.
-- **Business Impact:** P1 — wasted compute, deployment surface, confused ownership, misleading docs (CLAUDE.md still lists it as "Main API gateway").
-- **Technical Impact:** Two "main API" services (`conflict-api` and `modular-api`) confuse routing and on‑call.
-- **Difficulty:** Low. **Priority:** **P1**.
-- **Recommended Solution:** Remove `conflict-api` from compose and delete the service; update CLAUDE.md, README, and any client config. If historical parity is needed, mark as deprecated for one release first.
-- **Estimated Effort:** 0.3 EW.
-- **Dependencies:** None.
-
 ### A3 — Parallel/legacy `database-service` HTTP API
 - **Root Cause:** `database-service` exposes `/api/articles`, `/api/analytics/summary`, `/api/search`, `/api/articles/{id}`, `/rebuild-events` that duplicate modular‑api. Frontend only calls modular‑api (`VITE_API_URL=:8000`).
 - **Business Impact:** P2 — duplicate surface to secure/test/maintain; inconsistent behavior between two implementations.
@@ -478,14 +469,13 @@ Goal: remove drift, parallel surfaces, silent‑failure modes; build the test ne
 
 | Wk | Item | Pri | Diff | EW | Depends |
 |---|---|---|---|---|---|
-| 5 | **A2** Delete `conflict-api` + update docs | P1 | L | 0.3 | S3 |
 | 5 | **CQ5** Bootstrap pytest + testcontainers (60% repo/route coverage) | P1 | M | 3 | DO1 |
 | 5–6 | **A1** Alembic baseline; remove runtime DDL from 3 services | P1 | H | 2 | DO1 |
 | 6 | **R5** Migrations w/ rollback (delivered via A1) | P2 | M | — | A1 |
 | 6 | **R2** Connection pool in database‑service | P1 | L–M | 1 | — |
 | 6–7 | **R3** Safe + guarded `/rebuild-events` | P1 | M | 1.5 | S3, A3 |
 | 7 | **R4** Idempotent aggregates + content‑hash markers | P1 | M | 2 | A1 |
-| 7 | **A3** Retire database‑service HTTP API (move `/rebuild-events`) | P2 | M | 1 | A1, A2, S4 |
+| 7 | **A3** Retire database‑service HTTP API (move `/rebuild-events`) | P2 | M | 1 | A1, S4 |
 | 8 | **CQ1** Split `IntelligenceRepository` | P1 | M | 2 | CQ5 |
 | 8 | **SC1a** Set‑based SQL to kill N+1 in event intelligence | P1 | M | 1.5 | R4 |
 | 9 | **SC3** Add missing indexes (Alembic revisions) | P2 | L | 0.3 | A1 |
@@ -565,9 +555,8 @@ Phase 1 (P0 enablers)
 These are near‑zero‑risk changes that immediately reduce blast radius and can ship in a single PR each:
 1. **DO2** — replace broken `.gitignore`/`.dockerignore`.
 2. **S1 + S2** — externalize all secrets, rotate GNews + DB password, purge `.token_seed`.
-3. **A2** — delete `conflict-api` container + service folder + docs references.
-4. **SC3** — add `sentiment` and `extracted_entities(entity_text)` indexes.
-5. **CQ7** — delete the fake Iran/Israel graph fallback.
+3. **SC3** — add `sentiment` and `extracted_entities(entity_text)` indexes.
+4. **CQ7** — delete the fake Iran/Israel graph fallback.
 
 ---
 

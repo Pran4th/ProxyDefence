@@ -14,7 +14,7 @@ ProxyDefence is a military-grade cyber defense intelligence platform with an eve
 GNews API → ingest-service → Kafka (raw_articles)
                           → ml-service → Kafka (processed_articles)
                                          → database-service → PostgreSQL + Elasticsearch
-                                         → conflict-api → Frontend
+                                         → modular-api → Frontend
 
 ```
 
@@ -26,7 +26,7 @@ GNews API → ingest-service → Kafka (raw_articles)
 | Ingest Service | 8001 |
 | ML Service | 8002 |
 | Database Service | 8003 |
-| Conflict API | 8004 |
+| Modular API | 8000 |
 | Kafka | 9092 |
 | PostgreSQL | 5432 |
 | Elasticsearch | 9200 |
@@ -54,13 +54,6 @@ GNews API → ingest-service → Kafka (raw_articles)
 * Indexes articles in Elasticsearch `processed_articles` index
 * Provides REST endpoints: `/api/articles`, `/api/analytics/summary`, `/api/search`, `/api/articles/{article_id}`
 
-**conflict-api** (`services/conflict-api/`)
-
-* Main API gateway for frontend
-* Queries PostgreSQL and Elasticsearch
-* Async FastAPI with connection pooling (asyncpg, AsyncElasticsearch)
-* Endpoints: `/articles`, `/articles/{article_id}`, `/analytics/summary`, `/search`
-
 ### Database Schema
 
 **processed_articles** - Main article table with id, title, content, source, published_at, ml_processed, confidence, sentiment
@@ -78,7 +71,7 @@ Schema defined in `infra/sql/init.sql`, initialized on PostgreSQL container star
 * React Hook Form + Zod for forms
 * Recharts for charts
 * Lucide React for icons
-* Axios for API calls to conflict-api
+* Axios for API calls to modular-api
 
 **Frontend API client** (`frontend/src/lib/api.ts`):
 
@@ -140,10 +133,6 @@ npm run preview     # Preview production build
 Each service runs on internal port 8000, mapped externally as shown above:
 
 ```bash
-# Conflict API
-cd services/conflict-api
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
 # Ingest Service
 cd services/ingest-service
 uvicorn app:app --host 0.0.0.0 --port 8000 --reload
@@ -173,6 +162,6 @@ curl http://localhost:8001/fetch-real-news
 * PostgreSQL credentials: `admin/admin123`, database: `defenseintel`
 * Elasticsearch runs with security disabled (single-node dev mode)
 * All services communicate over the `proxy_net` Docker bridge network
-* The `services/frontend/` directory is a placeholder - use `frontend/` at root instead
+* The frontend lives under `services/frontend/` and is served through the Docker Compose frontend service
 
 ---

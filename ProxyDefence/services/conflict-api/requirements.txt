@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-asyncpg
-elasticsearch==8.11.0
-pydantic
-aiohttp

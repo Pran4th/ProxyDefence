@@ -1,4 +1,38 @@
+# Environment files
 .env
+.env.*
 **/.env
+**/.env.*
+
+# Docker
 .docker-config/
-defense-intel-platform/ │── docker-compose.yml │── README.md │── services/ │ ├── ingest-service/ # Pulls OSINT/news data │ │ ├── app.py │ │ ├── requirements.txt │ │ └── Dockerfile │ │ │ ├── ml-service/ # ML microservice (classification, entity extraction) │ │ ├── app.py │ │ ├── requirements.txt │ │ └── Dockerfile │ │ │ ├── conflict-api/ # API Gateway (aggregates DB + ML results) │ │ ├── app.py │ │ ├── requirements.txt │ │ └── Dockerfile │ │── frontend/ # Next.js + Tailwind dashboard │ ├── package.json │ ├── Dockerfile │ │── infra/ # Infrastructure configs (k8s, terraform later) │ └── init.sql │ └── docs/ # Docs + diagrams 
+docker-data/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform (future)
+.terraform/
+*.tfstate
+*.tfstate.*
