@@ -37,21 +37,14 @@ class Settings:
     )
 
     # ── CORS ──────────────────────────────────────────────────────
-    print("=" * 80)
-    print("ENV CORS_ORIGINS =", os.getenv("CORS_ORIGINS"))
-    print("=" * 80)
-
     CORS_ORIGINS: list[str] = [
-    origin.strip()
-    for origin in os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080",
-    ).split(",")
-    if origin.strip()
-]
-
-    print("PARSED CORS_ORIGINS =", CORS_ORIGINS)
-    print("=" * 80)
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080",
+        ).split(",")
+        if origin.strip()
+    ]
 
     # ── Service URLs (overridden in local dev via .env) ────────────
     EMBEDDING_SERVICE_URL: str = os.getenv(

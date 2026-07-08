@@ -89,11 +89,7 @@ for router in protected_routers:
 
 app.include_router(health_router)
 
-print("=" * 80)
-print("CORS ORIGINS LOADED:")
-print(settings.CORS_ORIGINS)
-print(type(settings.CORS_ORIGINS))
-print("=" * 80)
+
 @app.middleware("http")
 async def audit_mutating_requests(request: Request, call_next):
     response = await call_next(request)
