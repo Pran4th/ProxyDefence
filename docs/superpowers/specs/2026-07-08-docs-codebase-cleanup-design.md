@@ -114,11 +114,17 @@ From the earlier research pass, fix:
   `phase1_source_study.py`)
 - `start_local_log.txt` (stray log; also add a `*_log.txt` pattern to
   `.gitignore` so this doesn't recur)
-- `backend/api_service/security.py`, `rate_limit.py`, `repositories/`,
-  `services/` (dead duplicate auth/rate-limit code — confirmed zero imports;
-  `backend/api/app.py` has its own independent implementation).
-  **Keep** `backend/api_service/main.py`/`__init__.py` — that's the live
-  Docker entrypoint.
+- `backend/api_service/services/__init__.py` (empty package, confirmed zero
+  references anywhere). **Correction from the original sweep**: `security.py`,
+  `rate_limit.py`, and `repositories/intelligence.py` were incorrectly flagged
+  as dead in the first pass — re-verified via direct grep and they are
+  **live, load-bearing code**: `security.py`'s `get_current_user`/
+  `create_access_token`/`require_admin` are imported by `backend/api/app.py`,
+  `auth/`, `cases/`, `reports/`, `watchlists/`, `alerts/`, `copilot/`, and
+  `common/deps.py`; `rate_limit.py`'s `limiter` is imported by `app.py` and
+  `auth/router.py`; `repositories/intelligence.py`'s `IntelligenceRepository`
+  is imported by `app.py` for audit logging. **Do not delete any of these
+  three** — only the empty `services/` package is dead.
 - `research/reports/leakage_audit_20260707_223156.md` (0 bytes, failed run)
 - `services/ml-platform/research/notebooks/output/` (empty scratch dir)
 - `services/ml-platform/data/reports/` (empty dir — confirm nothing expects
@@ -148,13 +154,12 @@ From the earlier research pass, fix:
 ## Testing / verification
 
 This is a docs/file-reorganization change with no runtime surface for most
-of it, except the `backend/api_service` dead-code deletion and the Makefile
-fix. Verification plan:
-- After deleting `backend/api_service/{security,rate_limit,repositories,services}`:
-  re-run `grep -rn "api_service.security\|api_service.rate_limit\|api_service\.repositories"`
-  across the repo to confirm zero references remain, then start
-  `modular-api` locally and confirm it still boots and `/health` responds
-  (proves nothing was silently relying on the deleted modules).
+of it, except the `backend/api_service/services/__init__.py` deletion and the
+Makefile fix. Verification plan:
+- After deleting `backend/api_service/services/__init__.py`: re-run
+  `grep -rn "api_service\.services"` across the repo to confirm zero
+  references remain, then start `modular-api` locally and confirm it still
+  boots and `/health` responds.
 - After the Makefile fix: run `make pipeline-test`/`make seed-demo`/`make reset-db`
   (or whichever are safe to run locally) and confirm they now resolve to a
   real script instead of erroring on a missing path.
