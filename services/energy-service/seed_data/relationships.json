@@ -1,0 +1,20 @@
+[
+  {"source_entity_slug": "ras-tanura", "source_entity_type": "port", "target_entity_slug": "saudi-aramco", "target_entity_type": "organization", "relationship_type": "owned_by"},
+  {"source_entity_slug": "ghawar", "source_entity_type": "oil_field", "target_entity_slug": "ras-tanura", "target_entity_type": "port", "relationship_type": "feeds_into"},
+  {"source_entity_slug": "ghawar", "source_entity_type": "oil_field", "target_entity_slug": "abqaiq-yanbu", "target_entity_type": "pipeline", "relationship_type": "feeds_into"},
+  {"source_entity_slug": "abqaiq-yanbu", "source_entity_type": "pipeline", "target_entity_slug": "yanbu", "target_entity_type": "port", "relationship_type": "connects_to"},
+  {"source_entity_slug": "ghawar", "source_entity_type": "oil_field", "target_entity_slug": "saudi-aramco", "target_entity_type": "organization", "relationship_type": "owned_by"},
+  {"source_entity_slug": "south-pars", "source_entity_type": "gas_field", "target_entity_slug": "ras-laffan", "target_entity_type": "port", "relationship_type": "feeds_into"},
+  {"source_entity_slug": "south-pars", "source_entity_type": "gas_field", "target_entity_slug": "qatar-energy", "target_entity_type": "organization", "relationship_type": "owned_by"},
+  {"source_entity_slug": "rumaila", "source_entity_type": "oil_field", "target_entity_slug": "basrah", "target_entity_type": "port", "relationship_type": "feeds_into"},
+  {"source_entity_slug": "tupi", "source_entity_type": "oil_field", "target_entity_slug": "monserrat", "target_entity_type": "port", "relationship_type": "feeds_into"},
+  {"source_entity_slug": "tupi", "source_entity_type": "oil_field", "target_entity_slug": "petrobras", "target_entity_type": "organization", "relationship_type": "owned_by"},
+  {"source_entity_slug": "jamnagar", "source_entity_type": "refinery", "target_entity_slug": "reliance-industries", "target_entity_type": "organization", "relationship_type": "owned_by"},
+  {"source_entity_slug": "baton-rouge", "source_entity_type": "refinery", "target_entity_slug": "exxonmobil", "target_entity_type": "organization", "relationship_type": "owned_by"},
+  {"source_entity_slug": "ras-tanura-refinery", "source_entity_type": "refinery", "target_entity_slug": "ras-tanura", "target_entity_type": "port", "relationship_type": "located_in"},
+  {"source_entity_slug": "druzhba", "source_entity_type": "pipeline", "target_entity_slug": "rosneft", "target_entity_type": "organization", "relationship_type": "operated_by"},
+  {"source_entity_slug": "btc", "source_entity_type": "pipeline", "target_entity_slug": "bp", "target_entity_type": "organization", "relationship_type": "operated_by"},
+  {"source_entity_slug": "us-spr", "source_entity_type": "strategic_petroleum_reserve", "target_entity_slug": "united-states", "target_entity_type": "location", "relationship_type": "located_in"},
+  {"source_entity_slug": "hormuz-to-singapore", "source_entity_type": "shipping_route", "target_entity_slug": "strait-of-hormuz", "target_entity_type": "location", "relationship_type": "crosses"},
+  {"source_entity_slug": "hormuz-to-rotterdam", "source_entity_type": "shipping_route", "target_entity_slug": "suez-canal", "target_entity_type": "location", "relationship_type": "crosses"}
+]

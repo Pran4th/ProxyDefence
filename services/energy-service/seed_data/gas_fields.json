@@ -1,0 +1,11 @@
+[
+  {"slug": "south-pars", "name": "South Pars / North Dome", "reserve_estimate_cf": 1400000000000000, "production_mcfd": 16000000, "latitude": 26.0000, "longitude": 52.0000, "location_slug": "qatar", "org_slug": "qatar-energy", "importance": 100, "criticality": "critical"},
+  {"slug": "urengoy", "name": "Urengoy Field", "reserve_estimate_cf": 350000000000000, "production_mcfd": 9000000, "latitude": 66.0000, "longitude": 77.0000, "location_slug": "russia", "org_slug": "gazprom", "importance": 95, "criticality": "critical"},
+  {"slug": "yamburg", "name": "Yamburg Field", "reserve_estimate_cf": 250000000000000, "production_mcfd": 7000000, "latitude": 67.0000, "longitude": 79.0000, "location_slug": "russia", "org_slug": "gazprom", "importance": 90, "criticality": "critical"},
+  {"slug": "groningen", "name": "Groningen Field", "reserve_estimate_cf": 100000000000000, "production_mcfd": 2000000, "latitude": 53.2500, "longitude": 6.7500, "location_slug": "netherlands", "org_slug": "shell", "importance": 75, "criticality": "high"},
+  {"slug": "troll", "name": "Troll Field", "reserve_estimate_cf": 60000000000000, "production_mcfd": 3500000, "latitude": 60.6333, "longitude": 3.7167, "location_slug": "norway", "org_slug": "equinor", "importance": 85, "criticality": "high"},
+  {"slug": "ormen-lange", "name": "Ormen Lange Field", "reserve_estimate_cf": 40000000000000, "production_mcfd": 2000000, "latitude": 63.5000, "longitude": 5.0000, "location_slug": "norway", "org_slug": "equinor", "importance": 80, "criticality": "high"},
+  {"slug": "sleipner", "name": "Sleipner Field", "reserve_estimate_cf": 30000000000000, "production_mcfd": 1500000, "latitude": 58.3667, "longitude": 1.9167, "location_slug": "norway", "org_slug": "equinor", "importance": 75, "criticality": "high"},
+  {"slug": "changbei", "name": "Changbei Field", "reserve_estimate_cf": 15000000000000, "production_mcfd": 1000000, "latitude": 38.0000, "longitude": 110.0000, "location_slug": "china", "org_slug": "cnpc", "importance": 70, "criticality": "medium"},
+  {"slug": "kashagan", "name": "Kashagan Field", "reserve_estimate_cf": 35000000000000, "production_mcfd": 800000, "latitude": 46.5000, "longitude": 51.5000, "location_slug": "iran", "org_slug": "eni", "importance": 65, "criticality": "medium"}
+]

@@ -1,0 +1,11 @@
+[
+  {"slug": "me-to-asia", "name": "Middle East to Asia (East of Suez)", "origin_location_slug": "saudi-arabia", "destination_location_slug": "china", "distance_km": 8000, "transit_time_days": 25, "importance": 100, "criticality": "critical"},
+  {"slug": "me-to-europe", "name": "Middle East to Europe (West of Suez)", "origin_location_slug": "saudi-arabia", "destination_location_slug": "netherlands", "distance_km": 6000, "transit_time_days": 18, "importance": 95, "criticality": "critical"},
+  {"slug": "me-to-americas", "name": "Middle East to Americas", "origin_location_slug": "saudi-arabia", "destination_location_slug": "united-states", "distance_km": 12000, "transit_time_days": 35, "importance": 90, "criticality": "high"},
+  {"slug": "russia-to-europe", "name": "Russia to Europe (Pipeline)", "origin_location_slug": "russia", "destination_location_slug": "netherlands", "distance_km": 4000, "transit_time_days": 10, "importance": 95, "criticality": "critical"},
+  {"slug": "west-africa-to-europe", "name": "West Africa to Europe", "origin_location_slug": "nigeria", "destination_location_slug": "netherlands", "distance_km": 5000, "transit_time_days": 12, "importance": 80, "criticality": "high"},
+  {"slug": "south-america-to-asia", "name": "South America to Asia", "origin_location_slug": "brazil", "destination_location_slug": "china", "distance_km": 18000, "transit_time_days": 40, "importance": 75, "criticality": "high"},
+  {"slug": "russia-to-asia", "name": "Russia to Asia (ESPO)", "origin_location_slug": "russia", "destination_location_slug": "china", "distance_km": 5000, "transit_time_days": 15, "importance": 85, "criticality": "high"},
+  {"slug": "us-to-europe", "name": "United States to Europe", "origin_location_slug": "united-states", "destination_location_slug": "netherlands", "distance_km": 6000, "transit_time_days": 10, "importance": 85, "criticality": "high"},
+  {"slug": "africa-to-asia", "name": "Africa to Asia", "origin_location_slug": "angola", "destination_location_slug": "india", "distance_km": 9000, "transit_time_days": 20, "importance": 70, "criticality": "medium"}
+]

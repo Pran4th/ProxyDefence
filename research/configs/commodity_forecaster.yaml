@@ -1,0 +1,56 @@
+experiment:
+  name: commodity_price_forecaster
+  type: regression
+  description: Forecast crude oil and natural gas prices using historical pricing, inventory levels, geopolitical risk, and macroeconomic indicators
+  author: system
+  random_seed: 42
+  tags:
+    - energy
+    - commodities
+    - forecasting
+    - regression
+
+dataset:
+  name: commodity_price_history
+  version: 1
+  target_column: price_direction_30d
+  test_size: 0.2
+  val_size: 0.1
+  feature_names:
+    - brent_crude_price
+    - wti_price
+    - henry_hub_price
+    - global_demand_forecast
+    - opec_production_quota
+    - us_inventory_mbbl
+    - spr_fill_level
+    - geopolitical_risk_index
+    - shipping_cost_index
+    - refinery_utilization_rate
+
+model:
+  type: lightgbm
+  parameters:
+    n_estimators: 300
+    max_depth: 6
+    learning_rate: 0.03
+    num_leaves: 31
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_samples: 20
+    reg_alpha: 0.1
+    reg_lambda: 0.1
+  evaluation:
+    metrics:
+      - rmse
+      - mae
+      - r2
+      - mape
+    cross_validation:
+      folds: 5
+      stratify: false
+
+export:
+  format: joblib
+  register: true
+  stage: development

@@ -1,0 +1,29 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/services/ml-platform/.venv/Scripts/python.exe",
+  "python.terminal.activateEnvironment": true,
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/services/ingest-service",
+    "${workspaceFolder}/services/ml-service",
+    "${workspaceFolder}/services/embedding-service",
+    "${workspaceFolder}/services/database-service",
+    "${workspaceFolder}/services/energy-service",
+    "${workspaceFolder}/services/ml-platform",
+    "${workspaceFolder}"
+  ],
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "files.exclude": {
+    "**/.venv": true,
+    "**/__pycache__": true,
+    "**/node_modules": true,
+    "**/.pytest_cache": true
+  },
+  "python.testing.pytestEnabled": true,
+  "python.testing.cwd": "${workspaceFolder}"
+}

@@ -1,0 +1,12 @@
+[
+  {"entity_slug": "ras-tanura", "entity_type": "port", "event_type": "maintenance", "severity": "medium", "description": "Scheduled maintenance on loading berths", "occurred_at": "2025-06-15T00:00:00Z", "resolved_at": "2025-06-20T00:00:00Z"},
+  {"entity_slug": "strait-of-hormuz", "entity_type": "location", "event_type": "conflict", "severity": "critical", "description": "Heightened geopolitical tensions in the strait", "occurred_at": "2025-03-01T00:00:00Z"},
+  {"entity_slug": "keystone", "entity_type": "pipeline", "event_type": "shutdown", "severity": "high", "description": "Temporary shutdown due to detected pressure anomaly", "occurred_at": "2025-02-10T00:00:00Z", "resolved_at": "2025-02-15T00:00:00Z"},
+  {"entity_slug": "ghawar", "entity_type": "oil_field", "event_type": "expansion", "severity": "low", "description": "Water injection capacity expansion project phase 2", "occurred_at": "2025-01-05T00:00:00Z", "resolved_at": "2025-04-20T00:00:00Z"},
+  {"entity_slug": "jamnagar", "entity_type": "refinery", "event_type": "expansion", "severity": "low", "description": "Capacity expansion from 1.24M to 1.4M bpd", "occurred_at": "2025-05-01T00:00:00Z"},
+  {"entity_slug": "ras-laffan", "entity_type": "port", "event_type": "natural_disaster", "severity": "medium", "description": "Cyclone impact on LNG terminal operations", "occurred_at": "2025-04-10T00:00:00Z", "resolved_at": "2025-04-12T00:00:00Z"},
+  {"entity_slug": "suez-canal", "entity_type": "location", "event_type": "shutdown", "severity": "critical", "description": "Blockage incident causing temporary closure", "occurred_at": "2025-03-23T00:00:00Z", "resolved_at": "2025-04-02T00:00:00Z"},
+  {"entity_slug": "btc", "entity_type": "pipeline", "event_type": "cyber_attack", "severity": "high", "description": "Cyber attack on SCADA systems, contained", "occurred_at": "2025-01-20T00:00:00Z", "resolved_at": "2025-01-25T00:00:00Z"},
+  {"entity_slug": "monserrat", "entity_type": "port", "event_type": "cyber_attack", "severity": "high", "description": "Ransomware attack on terminal operating system", "occurred_at": "2025-07-01T00:00:00Z", "resolved_at": "2025-07-08T00:00:00Z"},
+  {"entity_slug": "south-pars", "entity_type": "gas_field", "event_type": "maintenance", "severity": "medium", "description": "Scheduled platform maintenance phase 3", "occurred_at": "2025-08-01T00:00:00Z", "resolved_at": "2025-08-15T00:00:00Z"}
+]

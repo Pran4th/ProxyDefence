@@ -1,0 +1,10 @@
+[
+  {"slug": "three-gorges", "name": "Three Gorges Dam", "capacity_mw": 22500, "fuel_type": "hydro", "plant_type": "dam", "latitude": 30.8231, "longitude": 111.0000, "location_slug": "china", "org_slug": "sinopec", "importance": 100, "criticality": "critical"},
+  {"slug": "itanpu", "name": "Itaipu Dam", "capacity_mw": 14000, "fuel_type": "hydro", "plant_type": "dam", "latitude": -25.4090, "longitude": -54.5900, "location_slug": "brazil", "org_slug": "petrobras", "importance": 95, "criticality": "critical"},
+  {"slug": "taichung", "name": "Taichung Power Plant", "capacity_mw": 5824, "fuel_type": "coal", "plant_type": "thermal", "latitude": 24.2167, "longitude": 120.4833, "location_slug": "china", "org_slug": "sinopec", "importance": 85, "criticality": "high"},
+  {"slug": "surry", "name": "Surry Nuclear Power Plant", "capacity_mw": 1834, "fuel_type": "nuclear", "plant_type": "pressurized_water_reactor", "latitude": 37.1667, "longitude": -76.7000, "location_slug": "united-states", "org_slug": "exxonmobil", "importance": 75, "criticality": "high"},
+  {"slug": "shoiba", "name": "Shoaiba Power Plant", "capacity_mw": 5600, "fuel_type": "oil", "plant_type": "steam_turbine", "latitude": 20.5000, "longitude": 40.0000, "location_slug": "saudi-arabia", "org_slug": "saudi-aramco", "importance": 85, "criticality": "high"},
+  {"slug": "jebel-ali-power", "name": "Jebel Ali Power Plant", "capacity_mw": 9730, "fuel_type": "natural_gas", "plant_type": "combined_cycle", "latitude": 25.0000, "longitude": 55.0500, "location_slug": "uae", "org_slug": "adnoc", "importance": 90, "criticality": "critical"},
+  {"slug": "novovoronezh", "name": "Novovoronezh Nuclear Plant", "capacity_mw": 2597, "fuel_type": "nuclear", "plant_type": "vver_reactor", "latitude": 51.2667, "longitude": 39.2000, "location_slug": "russia", "org_slug": "rosneft", "importance": 70, "criticality": "high"},
+  {"slug": "kinder", "name": "Kinder Morgan", "capacity_mw": 3500, "fuel_type": "natural_gas", "plant_type": "combined_cycle", "latitude": 29.7600, "longitude": -95.3600, "location_slug": "united-states", "org_slug": "exxonmobil", "importance": 70, "criticality": "medium"}
+]

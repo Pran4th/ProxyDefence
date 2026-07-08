@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Setup Environment",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-File", "${workspaceFolder}/scripts/dev/setup/setup.ps1"],
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Infrastructure",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-File", "${workspaceFolder}/scripts/dev/infrastructure/start-infra.ps1"],
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "Stop Infrastructure",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-File", "${workspaceFolder}/scripts/dev/infrastructure/stop-infra.ps1"],
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run All Tests",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-File", "${workspaceFolder}/scripts/testing/run-tests.ps1"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run ML Platform Tests",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "$env:PYTHONPATH='${workspaceFolder}'; $env:ENVIRONMENT='test'; & '${workspaceFolder}/services/ml-platform/.venv/Scripts/python.exe' -m pytest '${workspaceFolder}/services/ml-platform/tests' -v"
+      ],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Cache Files",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-File", "${workspaceFolder}/scripts/maintenance/clean.ps1"],
+      "group": "none",
+      "problemMatcher": []
+    }
+  ]
+}

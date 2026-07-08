@@ -1,0 +1,176 @@
+import { Bell, Globe, Lock, Shield, User } from "lucide-react";
+
+import AppShell from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/context/AuthContext";
+
+const Profile = () => {
+  const { user } = useAuth();
+
+  return (
+    <AppShell
+      title="Profile and access"
+      subtitle="Manage analyst identity, alerting preferences, and operational access posture."
+    >
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-elevation">
+            <div className="mb-6 flex items-center gap-4">
+              <User className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Profile Information</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="username">Username</Label>
+                  <Input id="username" defaultValue={user?.username || "Analyst"} className="mt-1" />
+                </div>
+                <div>
+                  <Label htmlFor="role">Role</Label>
+                  <Input id="role" defaultValue={user?.role || "observer"} className="mt-1" />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" defaultValue={user?.email || "analyst@proxydefence.local"} className="mt-1" />
+              </div>
+
+              <div>
+                <Label htmlFor="organization">Organization</Label>
+                <Input id="organization" defaultValue="ProxyDefence Intelligence Unit" className="mt-1" />
+              </div>
+
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Input id="location" defaultValue="Global operations" className="mt-1" />
+              </div>
+
+              <Button variant="hero">Save Changes</Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-6 shadow-elevation">
+            <div className="mb-6 flex items-center gap-4">
+              <Lock className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Security</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="current-password">Current Password</Label>
+                <Input id="current-password" type="password" className="mt-1" />
+              </div>
+
+              <div>
+                <Label htmlFor="new-password">New Password</Label>
+                <Input id="new-password" type="password" className="mt-1" />
+              </div>
+
+              <div>
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input id="confirm-password" type="password" className="mt-1" />
+              </div>
+
+              <Button variant="outline">Change Password</Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-6 shadow-elevation">
+            <div className="mb-6 flex items-center gap-4">
+              <Bell className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Notifications</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Critical Threat Alerts</p>
+                  <p className="text-sm text-muted-foreground">Get notified about critical threats</p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Weekly Reports</p>
+                  <p className="text-sm text-muted-foreground">Receive weekly security summaries</p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Simulation Results</p>
+                  <p className="text-sm text-muted-foreground">Alerts when simulations complete</p>
+                </div>
+                <Switch />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">System Updates</p>
+                  <p className="text-sm text-muted-foreground">New features and improvements</p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-elevation">
+            <h4 className="mb-4 font-semibold">Account Status</h4>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Plan</p>
+                <p className="text-lg font-bold">Analyst Workspace</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Member Since</p>
+                <p className="text-lg font-bold">
+                  {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "Recently"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">API Usage</p>
+                <p className="text-lg font-bold">Protected by JWT</p>
+              </div>
+            </div>
+            <Button variant="outline" className="mt-4 w-full">
+              Review Access Policy
+            </Button>
+          </div>
+
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-6">
+            <Globe className="mb-3 h-8 w-8 text-primary" />
+            <h4 className="mb-2 font-semibold">Location Services</h4>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Tune region-specific monitoring for priority theaters and actors.
+            </p>
+            <Button variant="outline" size="sm" className="w-full">
+              Configure
+            </Button>
+          </div>
+
+          <div className="rounded-lg border border-accent/30 bg-accent/5 p-6">
+            <Shield className="mb-3 h-8 w-8 text-accent" />
+            <h4 className="mb-2 font-semibold">Two-Factor Auth</h4>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Add an extra verification step before granting dashboard access.
+            </p>
+            <Button size="sm" className="w-full">
+              Enable 2FA
+            </Button>
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  );
+};
+
+export default Profile;

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+echo "Open separate terminal tabs and run each service:"
+echo ""
+echo "  scripts/dev/backend/start-ingest.sh"
+echo "  scripts/dev/backend/start-ml.sh"
+echo "  scripts/dev/backend/start-embedding.sh"
+echo "  scripts/dev/backend/start-database.sh"
+echo "  scripts/dev/backend/start-energy.sh"
+echo "  scripts/dev/backend/start-ml-platform.sh"
+echo "  scripts/dev/backend/start-modular-api.sh"
+echo ""
+echo "Background consumers (optional):"
+echo "  scripts/dev/backend/start-consumers.sh"

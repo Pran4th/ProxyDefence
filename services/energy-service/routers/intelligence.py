@@ -1,0 +1,450 @@
+"""Intelligence API — risk scoring, signals, scenarios, and dashboards."""
+
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+
+from db import get_pool
+from filters import FilterParams
+from models import ASSET_TYPE_BY_TABLE
+from backend.shared.logging_config import get_logger
+from services.risk_engine import (
+    AISIngestor,
+    CommodityPriceIngestor,
+    RiskScoringEngine,
+    SanctionsIngestor,
+    SignalDetector,
+)
+
+logger = get_logger(__name__)
+
+router = APIRouter(prefix="/api/v1/intelligence", tags=["Intelligence"])
+
+
+def _table_to_asset(table_name: str) -> str:
+    """Convert plural table name to singular asset type (e.g. import_corridors -> import_corridor)."""
+    return ASSET_TYPE_BY_TABLE.get(table_name, table_name.rstrip("s"))
+
+
+def _row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
+    return dict(row)
+
+
+# ── Signals ─────────────────────────────────────────────────────────────────
+
+
+@router.post("/signals", status_code=201)
+async def create_signal(
+    body: dict[str, Any],
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    detector = SignalDetector(pool)
+    try:
+        result = await detector.ingest_signal(body)
+        return _row_to_dict(result)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.get("/signals")
+async def list_signals(
+    severity: str | None = Query(None, regex="^(low|moderate|elevated|high|critical)$"),
+    risk_dimension: str | None = Query(None, regex="^(geopolitical|operational|economic|environmental)$"),
+    pool: asyncpg.Pool = Depends(get_pool),
+    filters: FilterParams = Depends(),
+) -> dict[str, Any]:
+    conditions = ["expires_at > NOW()"]
+    params: list[Any] = []
+
+    if severity:
+        conditions.append(f"severity = ${len(params) + 1}")
+        params.append(severity)
+    if risk_dimension:
+        conditions.append(f"risk_dimension = ${len(params) + 1}")
+        params.append(risk_dimension)
+
+    where = " AND ".join(conditions)
+    count_sql = f"SELECT COUNT(*) FROM energy.disruption_signals WHERE {where}"
+    total = await pool.fetchval(count_sql, *params)
+
+    order = "created_at DESC"
+    params.append(filters.limit)
+    params.append(filters.offset)
+    data_sql = f"SELECT * FROM energy.disruption_signals WHERE {where} ORDER BY {order} LIMIT ${len(params)-1} OFFSET ${len(params)}"
+    rows = await pool.fetch(data_sql, *params)
+
+    return {
+        "items": [_row_to_dict(r) for r in rows],
+        "total": total or 0,
+        "limit": filters.limit,
+        "offset": filters.offset,
+    }
+
+
+@router.get("/signals/{signal_uuid}")
+async def get_signal(
+    signal_uuid: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    row = await pool.fetchrow(
+        "SELECT * FROM energy.disruption_signals WHERE uuid = $1::uuid",
+        signal_uuid,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return _row_to_dict(row)
+
+
+# ── Risk scores ─────────────────────────────────────────────────────────────
+
+
+@router.get("/risk")
+async def get_risk_dashboard(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    detector = SignalDetector(pool)
+    return await detector.get_dashboard()
+
+
+@router.get("/risk/entity/{entity_uuid}")
+async def get_entity_risk(
+    entity_uuid: str,
+    entity_type: str = Query("import_corridors"),
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    engine = RiskScoringEngine(pool)
+    scores = await engine.score_entity(entity_uuid, entity_type)
+    await engine.persist_score(entity_uuid, entity_type, "overall", scores.get("overall", 0.5))
+
+    scores_row = await pool.fetchrow(
+        """SELECT * FROM energy.risk_scores
+           WHERE entity_uuid = $1::uuid AND dimension = 'overall'
+           ORDER BY created_at DESC LIMIT 1""",
+        entity_uuid,
+    )
+
+    return {
+        "entity_uuid": entity_uuid,
+        "entity_type": entity_type,
+        "scores": scores,
+        "recorded_at": scores_row["created_at"].isoformat() if scores_row else None,
+    }
+
+
+@router.get("/risk/trends")
+async def get_risk_trends(
+    entity_uuid: str | None = Query(None),
+    dimension: str | None = Query(None, regex="^(geopolitical|operational|economic|environmental|overall)$"),
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    conditions: list[str] = ["1=1"]
+    params: list[Any] = []
+
+    if entity_uuid:
+        conditions.append(f"entity_uuid = ${len(params) + 1}::uuid")
+        params.append(entity_uuid)
+    if dimension:
+        conditions.append(f"dimension = ${len(params) + 1}")
+        params.append(dimension)
+
+    where = " AND ".join(conditions)
+    rows = await pool.fetch(
+        f"""SELECT dimension, entity_uuid, score, confidence, created_at
+            FROM energy.risk_scores WHERE {where}
+            ORDER BY created_at DESC LIMIT 200""",
+        *params,
+    )
+
+    return {
+        "items": [_row_to_dict(r) for r in rows],
+        "total": len(rows),
+    }
+
+
+# ── Scenarios ───────────────────────────────────────────────────────────────
+
+
+@router.post("/scenarios/evaluate")
+async def evaluate_scenario(
+    body: dict[str, Any],
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    detector = SignalDetector(pool)
+    return await detector.evaluate_scenario(body)
+
+
+@router.get("/scenarios")
+async def list_scenarios(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    rows = await pool.fetch(
+        """SELECT * FROM energy.scenario_assumptions
+           ORDER BY created_at DESC LIMIT 50"""
+    )
+    return {"items": [_row_to_dict(r) for r in rows], "total": len(rows)}
+
+
+@router.get("/scenarios/{scenario_uuid}")
+async def get_scenario(
+    scenario_uuid: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    row = await pool.fetchrow(
+        "SELECT * FROM energy.scenario_assumptions WHERE uuid = $1::uuid",
+        scenario_uuid,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    return _row_to_dict(row)
+
+
+# ── Risk factors ────────────────────────────────────────────────────────────
+
+
+@router.get("/risk-factors")
+async def list_risk_factors(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    rows = await pool.fetch(
+        """SELECT * FROM energy.risk_factors ORDER BY created_at DESC LIMIT 100"""
+    )
+    return {"items": [_row_to_dict(r) for r in rows], "total": len(rows)}
+
+
+# ── Data ingestion (admin) ──────────────────────────────────────────────────
+
+
+@router.post("/ingest/commodity-prices")
+async def trigger_commodity_ingest(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    ingestor = CommodityPriceIngestor(pool)
+    count = await ingestor.ingest()
+    signals = await ingestor.detect_signals(SignalDetector(pool))
+    return {"ingested": count, "signals_generated": len(signals)}
+
+
+@router.post("/ingest/sanctions")
+async def trigger_sanctions_ingest(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    ingestor = SanctionsIngestor(pool)
+    count = await ingestor.ingest()
+    signals = await ingestor.detect_signals(SignalDetector(pool))
+    return {"ingested": count, "signals_generated": len(signals)}
+
+
+@router.post("/ingest/ais")
+async def trigger_ais_ingest(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    ingestor = AISIngestor(pool)
+    count = await ingestor.ingest()
+    signals = await ingestor.detect_signals(SignalDetector(pool))
+    return {"ingested": count, "signals_generated": len(signals)}
+
+
+@router.post("/ingest/all")
+async def trigger_all_ingestors(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    results = {}
+
+    ingestor1 = CommodityPriceIngestor(pool)
+    c1 = await ingestor1.ingest()
+    s1 = await ingestor1.detect_signals(SignalDetector(pool))
+    results["commodity_prices"] = {"ingested": c1, "signals_generated": len(s1)}
+
+    ingestor2 = SanctionsIngestor(pool)
+    c2 = await ingestor2.ingest()
+    s2 = await ingestor2.detect_signals(SignalDetector(pool))
+    results["sanctions"] = {"ingested": c2, "signals_generated": len(s2)}
+
+    ingestor3 = AISIngestor(pool)
+    c3 = await ingestor3.ingest()
+    s3 = await ingestor3.detect_signals(SignalDetector(pool))
+    results["ais"] = {"ingested": c3, "signals_generated": len(s3)}
+
+    return results
+
+
+# ── Commodity prices view ───────────────────────────────────────────────────
+
+
+@router.get("/commodity-prices")
+async def list_commodity_prices(
+    pool: asyncpg.Pool = Depends(get_pool),
+    filters: FilterParams = Depends(),
+) -> dict[str, Any]:
+    total = await pool.fetchval("SELECT COUNT(*) FROM energy.commodity_prices")
+    rows = await pool.fetch(
+        """SELECT * FROM energy.commodity_prices
+           ORDER BY recorded_at DESC
+           LIMIT $1 OFFSET $2""",
+        filters.limit, filters.offset,
+    )
+    return {"items": [_row_to_dict(r) for r in rows], "total": total or 0, "limit": filters.limit, "offset": filters.offset}
+
+
+@router.get("/port-congestion")
+async def list_port_congestion(
+    pool: asyncpg.Pool = Depends(get_pool),
+    filters: FilterParams = Depends(),
+) -> dict[str, Any]:
+    total = await pool.fetchval("SELECT COUNT(*) FROM energy.port_congestion")
+    rows = await pool.fetch(
+        """SELECT * FROM energy.port_congestion
+           ORDER BY congestion_pct DESC
+           LIMIT $1 OFFSET $2""",
+        filters.limit, filters.offset,
+    )
+    return {"items": [_row_to_dict(r) for r in rows], "total": total or 0, "limit": filters.limit, "offset": filters.offset}
+
+
+@router.get("/tanker-availability")
+async def list_tanker_availability(
+    pool: asyncpg.Pool = Depends(get_pool),
+    filters: FilterParams = Depends(),
+) -> dict[str, Any]:
+    total = await pool.fetchval("SELECT COUNT(*) FROM energy.tanker_availability")
+    rows = await pool.fetch(
+        """SELECT * FROM energy.tanker_availability
+           ORDER BY recorded_at DESC
+           LIMIT $1 OFFSET $2""",
+        filters.limit, filters.offset,
+    )
+    return {"items": [_row_to_dict(r) for r in rows], "total": total or 0, "limit": filters.limit, "offset": filters.offset}
+
+
+@router.get("/sanctions")
+async def list_sanctions(
+    pool: asyncpg.Pool = Depends(get_pool),
+    filters: FilterParams = Depends(),
+) -> dict[str, Any]:
+    total = await pool.fetchval("SELECT COUNT(*) FROM energy.sanctions")
+    rows = await pool.fetch(
+        """SELECT * FROM energy.sanctions
+           ORDER BY updated_at DESC
+           LIMIT $1 OFFSET $2""",
+        filters.limit, filters.offset,
+    )
+    return {"items": [_row_to_dict(r) for r in rows], "total": total or 0, "limit": filters.limit, "offset": filters.offset}
+
+
+# ── Risk-linked entity details ──────────────────────────────────────────────
+
+
+@router.get("/entity/{entity_table}/{entity_uuid}/risk-profile")
+async def get_entity_risk_profile(
+    entity_table: str,
+    entity_uuid: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    asset_type = _table_to_asset(entity_table)
+    entity_row = await pool.fetchrow(
+        f"SELECT * FROM energy.{entity_table} WHERE uuid = $1::uuid AND is_deleted = false",
+        entity_uuid,
+    )
+    if not entity_row:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    risk_scores = await pool.fetch(
+        """SELECT dimension, score, confidence, created_at
+           FROM energy.risk_scores
+           WHERE entity_uuid = $1::uuid AND expires_at > NOW()
+           ORDER BY created_at DESC""",
+        entity_uuid,
+    )
+
+    signals = await pool.fetch(
+        """SELECT * FROM energy.disruption_signals
+           WHERE (affected_entity_uuid = $1::uuid OR affected_entity_type = $2)
+           AND expires_at > NOW()
+           ORDER BY created_at DESC LIMIT 20""",
+        entity_uuid,
+        asset_type,
+    )
+
+    related_risks = await pool.fetch(
+        """SELECT rs.entity_uuid, rs.entity_type, rs.dimension, rs.score, rs.confidence
+           FROM energy.risk_scores rs
+           WHERE rs.expires_at > NOW()
+           AND rs.entity_type::text IN (
+               SELECT er.source_entity_type::text FROM energy.entity_relationships er
+               WHERE (er.source_entity_type::text = $2 AND er.source_entity_id = $3)
+               UNION
+               SELECT er.target_entity_type::text FROM energy.entity_relationships er
+               WHERE (er.target_entity_type::text = $2 AND er.target_entity_id = $3)
+           )
+           AND rs.entity_uuid != $1::uuid
+           AND rs.dimension = 'overall'
+           ORDER BY rs.score DESC LIMIT 10""",
+        entity_uuid, asset_type, entity_row["id"],
+    )
+
+    return {
+        "entity": _row_to_dict(entity_row),
+        "risk_scores": [_row_to_dict(r) for r in risk_scores],
+        "active_signals": [_row_to_dict(r) for r in signals],
+        "related_entity_risks": [_row_to_dict(r) for r in related_risks],
+    }
+
+
+# ── Knowledge Graph Risk Propagation ────────────────────────────────────────
+
+
+@router.post("/propagate")
+async def propagate_risk(
+    body: dict[str, Any],
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    from services.ml_bridge import RiskPropagator
+
+    entity_uuid = body.get("entity_uuid")
+    entity_type = body.get("entity_type", "import_corridors")
+    risk_score = body.get("risk_score", 0.5)
+
+    propagator = RiskPropagator(pool)
+    count = await propagator.propagate(entity_uuid, entity_type, risk_score)
+
+    return {
+        "source": entity_uuid,
+        "source_type": entity_type,
+        "propagated_to": count,
+        "propagation_factor": RiskPropagator.PROPAGATION_FACTOR,
+    }
+
+
+@router.get("/propagation-map")
+async def get_propagation_map(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    rows = await pool.fetch(
+        """SELECT rs.entity_uuid, rs.entity_type, rs.score, rs.confidence,
+                  rs.breakdown, rs.created_at
+           FROM energy.risk_scores rs
+           WHERE rs.dimension = 'overall'
+           AND rs.expires_at > NOW()
+           AND rs.breakdown ? 'propagated_from'
+           ORDER BY rs.score DESC LIMIT 50"""
+    )
+
+    sources = await pool.fetch(
+        """SELECT rs.entity_uuid, rs.entity_type, rs.score
+           FROM energy.risk_scores rs
+           WHERE rs.dimension = 'overall'
+           AND rs.expires_at > NOW()
+           AND NOT (rs.breakdown ? 'propagated_from')
+           ORDER BY rs.score DESC LIMIT 20"""
+    )
+
+    return {
+        "propagated_scores": [_row_to_dict(r) for r in rows],
+        "source_scores": [_row_to_dict(r) for r in sources],
+        "total_propagated": len(rows),
+        "total_sources": len(sources),
+    }

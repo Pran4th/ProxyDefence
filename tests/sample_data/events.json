@@ -1,0 +1,54 @@
+[
+  {
+    "id": 1,
+    "title": "Iran-Israel Cyber Conflict Escalation",
+    "description": "Series of cyber attacks between Iranian and Israeli state-sponsored groups targeting critical infrastructure.",
+    "event_type": "cyber_attack",
+    "severity": "critical",
+    "status": "active",
+    "confidence": 0.92,
+    "start_date": "2026-06-15T00:00:00Z",
+    "source_entity": "Iran",
+    "target_entity": "Israel",
+    "related_articles": [1]
+  },
+  {
+    "id": 2,
+    "title": "North Korean Missile Provocation",
+    "description": "North Korea conducts ballistic missile test over Japanese territory.",
+    "event_type": "military_operation",
+    "severity": "high",
+    "status": "active",
+    "confidence": 0.88,
+    "start_date": "2026-07-02T00:00:00Z",
+    "source_entity": "North Korea",
+    "target_entity": "Japan",
+    "related_articles": [2]
+  },
+  {
+    "id": 3,
+    "title": "China-Russia Defense Pact",
+    "description": "China and Russia sign comprehensive defense cooperation agreement.",
+    "event_type": "treaty",
+    "severity": "medium",
+    "status": "active",
+    "confidence": 0.85,
+    "start_date": "2026-07-01T00:00:00Z",
+    "source_entity": "China",
+    "target_entity": "Russia",
+    "related_articles": [3]
+  },
+  {
+    "id": 4,
+    "title": "Houthi Drone Strike on Saudi Oil Facility",
+    "description": "Houthi rebels claim responsibility for drone attack on Saudi oil processing facility.",
+    "event_type": "attack",
+    "severity": "high",
+    "status": "active",
+    "confidence": 0.81,
+    "start_date": "2026-06-29T00:00:00Z",
+    "source_entity": "Houthi",
+    "target_entity": "Saudi Arabia",
+    "related_articles": [5]
+  }
+]

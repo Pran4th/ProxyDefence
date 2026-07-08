@@ -1,0 +1,20 @@
+[
+  {
+    "email": "admin@defenseintel.local",
+    "username": "admin",
+    "password": "AdminPass123!",
+    "role": "admin"
+  },
+  {
+    "email": "analyst@defenseintel.local",
+    "username": "analyst1",
+    "password": "AnalystPass123!",
+    "role": "analyst"
+  },
+  {
+    "email": "viewer@defenseintel.local",
+    "username": "viewer1",
+    "password": "ViewerPass123!",
+    "role": "viewer"
+  }
+]

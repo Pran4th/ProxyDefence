@@ -1,0 +1,100 @@
+[
+  {
+    "id": 1,
+    "title": "Iran Launches Cyber Attack on Israeli Energy Infrastructure",
+    "content": "Iranian state-sponsored hackers have breached multiple Israeli energy facilities according to a new report from cybersecurity firm Mandiant. The attack targeted critical infrastructure including power grids and water treatment plants. Israeli officials confirmed they are investigating the incident and have implemented additional security measures.",
+    "source": "Reuters",
+    "author": "John Smith",
+    "url": "https://example.com/article/1",
+    "published_at": "2026-07-03T08:00:00Z",
+    "sentiment": "negative",
+    "confidence": 0.92,
+    "threat_score": 8.5,
+    "risk_level": "critical",
+    "topic": "cyber warfare",
+    "ml_processed": true,
+    "entities": [
+      {"text": "Iran", "type": "GPE", "confidence": 0.98},
+      {"text": "Israel", "type": "GPE", "confidence": 0.98},
+      {"text": "Mandiant", "type": "ORG", "confidence": 0.95}
+    ]
+  },
+  {
+    "id": 2,
+    "title": "North Korea Test Fires Ballistic Missile Over Japan",
+    "content": "North Korea launched a ballistic missile that flew over northern Japan before landing in the Pacific Ocean. Japanese Prime Minister condemned the launch as a threat to regional security. The United Nations Security Council is expected to hold an emergency session.",
+    "source": "Associated Press",
+    "author": "Sarah Lee",
+    "url": "https://example.com/article/2",
+    "published_at": "2026-07-02T14:30:00Z",
+    "sentiment": "negative",
+    "confidence": 0.88,
+    "threat_score": 7.2,
+    "risk_level": "high",
+    "topic": "military",
+    "ml_processed": true,
+    "entities": [
+      {"text": "North Korea", "type": "GPE", "confidence": 0.99},
+      {"text": "Japan", "type": "GPE", "confidence": 0.98},
+      {"text": "United Nations Security Council", "type": "ORG", "confidence": 0.95}
+    ]
+  },
+  {
+    "id": 3,
+    "title": "China and Russia Sign New Defense Cooperation Agreement",
+    "content": "China and Russia have signed a comprehensive defense cooperation agreement aimed at countering US influence in the Asia-Pacific region. The agreement includes joint military exercises, intelligence sharing, and technology transfer provisions.",
+    "source": "BBC",
+    "author": "Michael Chen",
+    "url": "https://example.com/article/3",
+    "published_at": "2026-07-01T10:00:00Z",
+    "sentiment": "negative",
+    "confidence": 0.85,
+    "threat_score": 6.8,
+    "risk_level": "high",
+    "topic": "geopolitics",
+    "ml_processed": true,
+    "entities": [
+      {"text": "China", "type": "GPE", "confidence": 0.99},
+      {"text": "Russia", "type": "GPE", "confidence": 0.99},
+      {"text": "US", "type": "GPE", "confidence": 0.95}
+    ]
+  },
+  {
+    "id": 4,
+    "title": "Global Cybersecurity Summit Achieves Historic Agreement",
+    "content": "Nations from around the world have reached a landmark agreement on cybersecurity norms at the Global Cybersecurity Summit in Geneva. The treaty establishes frameworks for responsible state behavior in cyberspace and includes mechanisms for cooperation on incident response.",
+    "source": "Reuters",
+    "author": "Emma Wilson",
+    "url": "https://example.com/article/4",
+    "published_at": "2026-06-30T16:00:00Z",
+    "sentiment": "positive",
+    "confidence": 0.78,
+    "threat_score": 3.2,
+    "risk_level": "low",
+    "topic": "diplomacy",
+    "ml_processed": true,
+    "entities": [
+      {"text": "Geneva", "type": "GPE", "confidence": 0.97}
+    ]
+  },
+  {
+    "id": 5,
+    "title": "Houthi Rebels Claim Responsibility for Drone Strike on Saudi Oil Facility",
+    "content": "Yemen's Houthi rebels have claimed responsibility for a drone attack on a Saudi Arabian oil processing facility. The strike caused minor damage but no casualties. Saudi-led coalition forces responded with airstrikes on Houthi positions.",
+    "source": "Al Jazeera",
+    "author": "Ahmed Hassan",
+    "url": "https://example.com/article/5",
+    "published_at": "2026-06-29T06:00:00Z",
+    "sentiment": "negative",
+    "confidence": 0.81,
+    "threat_score": 7.5,
+    "risk_level": "high",
+    "topic": "military",
+    "ml_processed": true,
+    "entities": [
+      {"text": "Houthi", "type": "ORG", "confidence": 0.94},
+      {"text": "Yemen", "type": "GPE", "confidence": 0.97},
+      {"text": "Saudi Arabia", "type": "GPE", "confidence": 0.98}
+    ]
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {"entity_slug": "ghawar", "entity_type": "oil_field", "metric_type": "production_bpd", "value": 3800000, "unit": "bbl/day", "recorded_at": "2025-01-15T00:00:00Z"},
+  {"entity_slug": "ghawar", "entity_type": "oil_field", "metric_type": "production_bpd", "value": 3750000, "unit": "bbl/day", "recorded_at": "2025-02-15T00:00:00Z"},
+  {"entity_slug": "ghawar", "entity_type": "oil_field", "metric_type": "production_bpd", "value": 3820000, "unit": "bbl/day", "recorded_at": "2025-03-15T00:00:00Z"},
+  {"entity_slug": "ghawar", "entity_type": "oil_field", "metric_type": "reserve_estimate_barrels", "value": 58000000000, "unit": "barrels", "recorded_at": "2025-01-01T00:00:00Z"},
+  {"entity_slug": "ras-tanura", "entity_type": "port", "metric_type": "throughput_mtpa", "value": 400.0, "unit": "MTPA", "recorded_at": "2025-01-01T00:00:00Z"},
+  {"entity_slug": "ras-tanura", "entity_type": "port", "metric_type": "throughput_mtpa", "value": 395.0, "unit": "MTPA", "recorded_at": "2024-01-01T00:00:00Z"},
+  {"entity_slug": "ras-tanura", "entity_type": "port", "metric_type": "throughput_mtpa", "value": 410.0, "unit": "MTPA", "recorded_at": "2023-01-01T00:00:00Z"},
+  {"entity_slug": "jamnagar", "entity_type": "refinery", "metric_type": "capacity_bpd", "value": 1240000, "unit": "bbl/day", "recorded_at": "2025-01-01T00:00:00Z"},
+  {"entity_slug": "us-spr", "entity_type": "strategic_petroleum_reserve", "metric_type": "current_inventory_barrels", "value": 395000000, "unit": "barrels", "recorded_at": "2025-06-01T00:00:00Z"},
+  {"entity_slug": "us-spr", "entity_type": "strategic_petroleum_reserve", "metric_type": "current_inventory_barrels", "value": 380000000, "unit": "barrels", "recorded_at": "2025-03-01T00:00:00Z"},
+  {"entity_slug": "us-spr", "entity_type": "strategic_petroleum_reserve", "metric_type": "current_inventory_barrels", "value": 370000000, "unit": "barrels", "recorded_at": "2025-01-01T00:00:00Z"},
+  {"entity_slug": "rotterdam", "entity_type": "port", "metric_type": "throughput_mtpa", "value": 450.0, "unit": "MTPA", "recorded_at": "2025-01-01T00:00:00Z"},
+  {"entity_slug": "rotterdam", "entity_type": "port", "metric_type": "throughput_mtpa", "value": 440.0, "unit": "MTPA", "recorded_at": "2024-01-01T00:00:00Z"},
+  {"entity_slug": "druzhba", "entity_type": "pipeline", "metric_type": "capacity_bpd", "value": 2000000, "unit": "bbl/day", "recorded_at": "2025-01-01T00:00:00Z"}
+]

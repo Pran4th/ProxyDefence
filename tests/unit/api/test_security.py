@@ -1,0 +1,63 @@
+"""Unit tests for backend.api_service.security."""
+
+
+class TestHashPassword:
+    def test_returns_hash(self):
+        from backend.api_service.security import hash_password
+        hashed = hash_password("TestPass123!")
+        assert isinstance(hashed, str)
+        assert hashed != "TestPass123!"
+
+    def test_same_password_different_hashes(self):
+        from backend.api_service.security import hash_password
+        h1 = hash_password("TestPass123!")
+        h2 = hash_password("TestPass123!")
+        assert h1 != h2
+
+
+class TestVerifyPassword:
+    def test_verifies_correct_password(self):
+        from backend.api_service.security import hash_password, verify_password
+        hashed = hash_password("TestPass123!")
+        assert verify_password("TestPass123!", hashed) is True
+
+    def test_rejects_incorrect_password(self):
+        from backend.api_service.security import hash_password, verify_password
+        hashed = hash_password("TestPass123!")
+        assert verify_password("WrongPass!", hashed) is False
+
+
+class TestCreateAccessToken:
+    def test_returns_jwt_string(self, monkeypatch):
+        monkeypatch.setenv("JWT_SECRET_KEY", "test_secret_key_for_testing_only")
+        monkeypatch.setenv("POSTGRES_USER", "x")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "x")
+        monkeypatch.setenv("ELASTICSEARCH_PASSWORD", "x")
+
+        import importlib
+        from backend.shared import settings
+        importlib.reload(settings)
+
+        from backend.api_service.security import create_access_token
+        token = create_access_token("42", {"role": "admin"})
+        assert isinstance(token, str)
+        assert len(token.split(".")) == 3
+
+    def test_token_can_be_decoded(self, monkeypatch):
+        monkeypatch.setenv("JWT_SECRET_KEY", "test_secret_key_for_testing_only")
+        monkeypatch.setenv("POSTGRES_USER", "x")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "x")
+        monkeypatch.setenv("ELASTICSEARCH_PASSWORD", "x")
+
+        import importlib
+        from backend.shared import settings
+        importlib.reload(settings)
+
+        from jose import jwt
+        from backend.shared.settings import settings as s
+        from backend.api_service.security import create_access_token
+
+        token = create_access_token("42", {"role": "analyst"})
+        payload = jwt.decode(token, s.JWT_SECRET_KEY, algorithms=[s.JWT_ALGORITHM])
+        assert payload["sub"] == "42"
+        assert payload["role"] == "analyst"

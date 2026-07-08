@@ -1,0 +1,20 @@
+[
+  {"slug": "brent-crude", "name": "Brent Crude", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 82.0, "api_gravity": 38.0, "sulfur_content": 0.37, "category": "light_sweet"},
+  {"slug": "wti-crude", "name": "West Texas Intermediate", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 78.0, "api_gravity": 39.6, "sulfur_content": 0.24, "category": "light_sweet"},
+  {"slug": "dubai-crude", "name": "Dubai/Oman Crude", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 79.0, "api_gravity": 31.0, "sulfur_content": 2.0, "category": "medium_sour"},
+  {"slug": "urals-crude", "name": "Urals Crude", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 60.0, "api_gravity": 32.0, "sulfur_content": 1.4, "category": "medium_sour"},
+  {"slug": "arab-light", "name": "Arab Light", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 80.0, "api_gravity": 33.0, "sulfur_content": 1.8, "category": "medium_sour"},
+  {"slug": "arab-heavy", "name": "Arab Heavy", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 76.0, "api_gravity": 28.0, "sulfur_content": 2.8, "category": "heavy_sour"},
+  {"slug": "bonny-light", "name": "Bonny Light", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 81.0, "api_gravity": 35.0, "sulfur_content": 0.14, "category": "light_sweet"},
+  {"slug": "basrah-crude", "name": "Basrah Light", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 77.0, "api_gravity": 30.0, "sulfur_content": 2.5, "category": "medium_sour"},
+  {"slug": "espo-crude", "name": "ESPO Crude", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 75.0, "api_gravity": 34.5, "sulfur_content": 0.5, "category": "light_sweet"},
+  {"slug": "tupi-crude", "name": "Tupi Crude", "commodity_type": "crude", "unit": "USD/bbl", "benchmark_price": 79.0, "api_gravity": 28.0, "sulfur_content": 0.6, "category": "medium_sweet"},
+  {"slug": "gasoline", "name": "Gasoline", "commodity_type": "refined", "unit": "USD/gal", "benchmark_price": 2.80, "category": "refined_product"},
+  {"slug": "diesel", "name": "Diesel/Gasoil", "commodity_type": "refined", "unit": "USD/gal", "benchmark_price": 3.10, "category": "refined_product"},
+  {"slug": "jet-fuel", "name": "Jet Fuel", "commodity_type": "refined", "unit": "USD/gal", "benchmark_price": 3.40, "category": "refined_product"},
+  {"slug": "lng", "name": "Liquefied Natural Gas", "commodity_type": "lng", "unit": "USD/MMBtu", "benchmark_price": 12.50, "category": "natural_gas"},
+  {"slug": "naphtha", "name": "Naphtha", "commodity_type": "refined", "unit": "USD/ton", "benchmark_price": 680.0, "category": "refined_product"},
+  {"slug": "fuel-oil", "name": "Fuel Oil (3.5% Sulfur)", "commodity_type": "refined", "unit": "USD/ton", "benchmark_price": 420.0, "category": "refined_product"},
+  {"slug": "propane", "name": "Propane", "commodity_type": "ngl", "unit": "USD/gal", "benchmark_price": 0.95, "category": "natural_gas_liquids"},
+  {"slug": "coal-thermal", "name": "Thermal Coal", "commodity_type": "coal", "unit": "USD/ton", "benchmark_price": 110.0, "category": "solid_fuel"}
+]

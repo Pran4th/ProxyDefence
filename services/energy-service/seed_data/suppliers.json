@@ -1,0 +1,11 @@
+[
+  {"slug": "saudi-aramco-supplier", "name": "Saudi Aramco (Supplier)", "supplier_type": "national_oil_company", "market_share_pct": 12.5, "location_slug": "saudi-arabia", "org_slug": "saudi-aramco", "importance": 100, "criticality": "critical"},
+  {"slug": "rosneft-supplier", "name": "Rosneft (Supplier)", "supplier_type": "national_oil_company", "market_share_pct": 8.0, "location_slug": "russia", "org_slug": "rosneft", "importance": 90, "criticality": "critical"},
+  {"slug": "sinopec-supplier", "name": "Sinopec (Supplier)", "supplier_type": "national_oil_company", "market_share_pct": 7.5, "location_slug": "china", "org_slug": "sinopec", "importance": 85, "criticality": "high"},
+  {"slug": "adnoc-supplier", "name": "ADNOC (Supplier)", "supplier_type": "national_oil_company", "market_share_pct": 4.5, "location_slug": "uae", "org_slug": "adnoc", "importance": 80, "criticality": "high"},
+  {"slug": "exxonmobil-supplier", "name": "ExxonMobil (Supplier)", "supplier_type": "international_oil_company", "market_share_pct": 3.5, "location_slug": "united-states", "org_slug": "exxonmobil", "importance": 75, "criticality": "high"},
+  {"slug": "shell-supplier", "name": "Shell (Supplier)", "supplier_type": "international_oil_company", "market_share_pct": 3.0, "location_slug": "netherlands", "org_slug": "shell", "importance": 75, "criticality": "high"},
+  {"slug": "bp-supplier", "name": "BP (Supplier)", "supplier_type": "international_oil_company", "market_share_pct": 2.5, "location_slug": "united-kingdom", "org_slug": "bp", "importance": 70, "criticality": "high"},
+  {"slug": "petrobras-supplier", "name": "Petrobras (Supplier)", "supplier_type": "national_oil_company", "market_share_pct": 3.0, "location_slug": "brazil", "org_slug": "petrobras", "importance": 70, "criticality": "medium"},
+  {"slug": "equinor-supplier", "name": "Equinor (Supplier)", "supplier_type": "national_oil_company", "market_share_pct": 2.0, "location_slug": "norway", "org_slug": "equinor", "importance": 60, "criticality": "medium"}
+]

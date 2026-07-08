@@ -1,0 +1,54 @@
+experiment:
+  name: infrastructure_anomaly_detection
+  type: anomaly_detection
+  description: Detect anomalous behavior across energy infrastructure assets using operational telemetry and historical baseline comparisons
+  author: system
+  random_seed: 42
+  tags:
+    - energy
+    - anomaly
+    - infrastructure
+    - monitoring
+
+dataset:
+  name: infrastructure_telemetry
+  version: 1
+  target_column: is_anomaly
+  test_size: 0.2
+  val_size: 0.0
+  feature_names:
+    - throughput_rate
+    - pressure_level
+    - temperature
+    - vibration_score
+    - flow_rate_deviation
+    - efficiency_ratio
+    - downtime_minutes_7d
+    - alert_count_24h
+    - maintenance_recency_days
+    - capacity_utilization
+
+model:
+  type: random_forest
+  parameters:
+    n_estimators: 100
+    max_depth: 12
+    min_samples_split: 5
+    min_samples_leaf: 2
+    class_weight: balanced
+    max_samples: 0.8
+  evaluation:
+    metrics:
+      - f1
+      - precision
+      - recall
+      - roc_auc
+      - average_precision
+    cross_validation:
+      folds: 3
+      stratify: true
+
+export:
+  format: joblib
+  register: true
+  stage: development

@@ -1,0 +1,57 @@
+experiment:
+  name: disruption_risk_classifier
+  type: classification
+  description: Predict energy infrastructure disruption risk level (low/medium/high/critical) based on infrastructure attributes, geopolitical events, and historical incidents
+  author: system
+  random_seed: 42
+  tags:
+    - energy
+    - disruption
+    - risk
+    - classification
+
+dataset:
+  name: energy_infrastructure_incidents
+  version: 1
+  target_column: risk_level
+  test_size: 0.2
+  val_size: 0.1
+  feature_names:
+    - asset_age_years
+    - maintenance_score
+    - geopolitical_risk_index
+    - incident_count_90d
+    - region_tension_score
+    - commodity_price_volatility
+    - port_throughput_rate
+    - pipeline_capacity_utilization
+    - refinery_complexity_index
+    - supply_route_chokepoint_proximity
+
+model:
+  type: xgboost
+  parameters:
+    n_estimators: 200
+    max_depth: 8
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.7
+    min_child_weight: 3
+    gamma: 0.1
+    reg_alpha: 0.01
+    reg_lambda: 0.01
+  evaluation:
+    metrics:
+      - accuracy
+      - f1
+      - precision
+      - recall
+      - roc_auc
+    cross_validation:
+      folds: 5
+      stratify: true
+
+export:
+  format: joblib
+  register: true
+  stage: development

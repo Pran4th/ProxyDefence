@@ -1,0 +1,11 @@
+mlruns/
+__pycache__/
+*.pyc
+data/datasets/
+data/artifacts/
+data/features/
+data/reports/
+data/dvc-store/
+*.parquet
+*.joblib
+.dvc/

@@ -1,0 +1,17 @@
+[
+  {"entity_text": "Iran", "entity_type": "GPE", "confidence": 0.98},
+  {"entity_text": "Israel", "entity_type": "GPE", "confidence": 0.98},
+  {"entity_text": "United States", "entity_type": "GPE", "confidence": 0.97},
+  {"entity_text": "Russia", "entity_type": "GPE", "confidence": 0.97},
+  {"entity_text": "China", "entity_type": "GPE", "confidence": 0.96},
+  {"entity_text": "North Korea", "entity_type": "GPE", "confidence": 0.99},
+  {"entity_text": "Houthi", "entity_type": "ORG", "confidence": 0.94},
+  {"entity_text": "Hezbollah", "entity_type": "ORG", "confidence": 0.93},
+  {"entity_text": "ISIS", "entity_type": "ORG", "confidence": 0.95},
+  {"entity_text": "Mandiant", "entity_type": "ORG", "confidence": 0.92},
+  {"entity_text": "Donald Trump", "entity_type": "PERSON", "confidence": 0.96},
+  {"entity_text": "Vladimir Putin", "entity_type": "PERSON", "confidence": 0.97},
+  {"entity_text": "Hamas", "entity_type": "ORG", "confidence": 0.95},
+  {"entity_text": "Taliban", "entity_type": "ORG", "confidence": 0.94},
+  {"entity_text": "Ukrainian Armed Forces", "entity_type": "ORG", "confidence": 0.90}
+]
