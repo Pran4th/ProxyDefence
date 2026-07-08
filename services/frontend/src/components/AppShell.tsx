@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
 import logo from "@/assets/logo.png";
 
@@ -88,10 +89,12 @@ const AppShell = ({
         <aside className="hidden w-72 border-r border-border bg-card/60 backdrop-blur xl:flex xl:flex-col">
           <div className="border-b border-border px-6 py-5">
             <Link to="/" className="flex items-center gap-3">
-              <img src={logo} alt="ProxyDefence" className="h-10 w-10 rounded-xl" />
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">ProxyDefence</p>
-                <p className="text-lg font-semibold">Intelligence Core</p>
+              <img src={logo} alt="ProxyDefence" className="h-9 w-9 rounded-lg" />
+              <div className="leading-tight">
+                <p className="font-display text-lg tracking-tight text-foreground">ProxyDefence</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                  Intelligence Core
+                </p>
               </div>
             </Link>
           </div>
@@ -118,10 +121,10 @@ const AppShell = ({
                     to={item.to}
                     className={({ isActive }) =>
                       [
-                        "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors",
+                        "flex items-center gap-3 rounded-xl border-l-2 px-4 py-3 text-sm transition-colors",
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-glow"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          ? "border-l-primary bg-primary/10 font-medium text-foreground"
+                          : "border-l-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
                       ].join(" ")
                     }
                   >
@@ -153,12 +156,15 @@ const AppShell = ({
                 <h1 className="text-3xl font-bold">{title}</h1>
                 <p className="text-sm text-muted-foreground">{subtitle}</p>
               </div>
-              <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 md:flex">
-                <Shield className="h-4 w-4 text-primary" />
-                <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Session</p>
-                  <p className="text-sm font-medium">Authenticated intelligence access</p>
+              <div className="flex items-center gap-3">
+                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 md:flex">
+                  <Shield className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Session</p>
+                    <p className="text-sm font-medium">Authenticated intelligence access</p>
+                  </div>
                 </div>
+                <ThemeToggle />
               </div>
             </div>
           </header>
