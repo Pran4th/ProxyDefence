@@ -32,12 +32,18 @@ class RetrieverResult:
 class Retriever:
     """Hybrid retriever combining dense (pgvector), sparse (ES BM25), and knowledge graph expansion."""
 
-    def __init__(self, modular_api_url: str = "http://localhost:8000", embedding_service_url: str = "http://localhost:8005"):
+    def __init__(
+        self,
+        modular_api_url: str = "http://localhost:8000",
+        embedding_service_url: str = "http://localhost:8005",
+        auth_token: str | None = None,
+    ):
         self.modular_api_url = modular_api_url
         self.embedding_service_url = embedding_service_url
+        self._auth_headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
 
     async def dense_retrieval(self, query: str, limit: int = 10) -> list[RetrieverResult]:
-        async with httpx.AsyncClient(base_url=self.modular_api_url) as client:
+        async with httpx.AsyncClient(base_url=self.modular_api_url, headers=self._auth_headers) as client:
             try:
                 resp = await client.get("/semantic-search", params={"q": query, "limit": limit}, timeout=15)
                 resp.raise_for_status()
@@ -57,9 +63,9 @@ class Retriever:
                 return []
 
     async def sparse_retrieval(self, query: str, limit: int = 10) -> list[RetrieverResult]:
-        async with httpx.AsyncClient(base_url=self.modular_api_url) as client:
+        async with httpx.AsyncClient(base_url=self.modular_api_url, headers=self._auth_headers) as client:
             try:
-                resp = await client.get("/search", params={"q": query, "limit": limit}, timeout=15)
+                resp = await client.get("/search/", params={"q": query, "limit": limit}, timeout=15)
                 resp.raise_for_status()
                 data = resp.json() if isinstance(resp.json(), list) else resp.json().get("results", [])
                 return [
@@ -77,7 +83,7 @@ class Retriever:
                 return []
 
     async def kg_expansion(self, query: str, limit: int = 10) -> list[RetrieverResult]:
-        async with httpx.AsyncClient(base_url=self.modular_api_url) as client:
+        async with httpx.AsyncClient(base_url=self.modular_api_url, headers=self._auth_headers) as client:
             try:
                 resp = await client.get("/graph/network", timeout=15)
                 resp.raise_for_status()

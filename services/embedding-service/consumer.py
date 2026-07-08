@@ -83,7 +83,7 @@ async def run():
 
                 vector = embed_text(text)
                 stored = await store_embedding(pool, dedupe_key, vector)
-                logger.info("embedding_processed", article_id=article_id, stored=stored)
+                logger.info("embedding_processed", dedupe_key=dedupe_key, stored=stored)
                 consumer.commit()
 
             except Exception as exc:
