@@ -4,7 +4,7 @@
   Single-command launcher for the complete ProxyDefence local dev environment.
 .DESCRIPTION
   Inspects the environment, cleans up old processes, starts Docker infra,
-  launches all 7 API services (separate windows), 3 Kafka consumers, and
+  launches all 6 API services (separate windows), 3 Kafka consumers, and
   the Vite frontend.  Stops on the FIRST failure and prints diagnostic info.
 .PARAMETER SkipInfra
   Skip docker compose up (PG / Kafka / ES already running).
@@ -349,9 +349,8 @@ function Stop-On-Failure {
 # ---------------------------------------------------------------------------
 
 $Script:svcList = @(
-    @{Name="modular-api";       Dir="services/modular-api";       Port=8000; Script="start-modular-api.ps1";  App="backend.api_service.main:app"}
+    @{Name="modular-api";       Dir="services/modular-api";       Port=8000; Script="start-modular-api.ps1";  App="backend.api.app:app"}
     @{Name="ingest-service";    Dir="services/ingest-service";    Port=8001; Script="start-ingest.ps1";       App="app:app"}
-    @{Name="ml-service";        Dir="services/ml-service";        Port=8002; Script="start-ml.ps1";           App="app:app"}
     @{Name="database-service";  Dir="services/database-service";  Port=8003; Script="start-database.ps1";     App="app:app"}
     @{Name="embedding-service"; Dir="services/embedding-service"; Port=8005; Script="start-embedding.ps1";    App="app:app"}
     @{Name="energy-service";    Dir="services/energy-service";    Port=8006; Script="start-energy.ps1";       App="app:app"}
@@ -359,13 +358,13 @@ $Script:svcList = @(
 )
 
 $Script:consumers = @(
-    @{Name="ml-consumer";         Dir="services/ml-service";        File="consumer.py";     LogFile="ml-consumer.log"}
-    @{Name="db-consumer";         Dir="services/database-service";  File="consumer.py";     LogFile="db-consumer.log"}
-    @{Name="embedding-consumer";  Dir="services/embedding-service"; File="consumer.py";     LogFile="embedding-consumer.log"}
+    @{Name="ml-platform-consumer"; Dir="services/ml-platform";       File="consumer/article_enrichment.py"; LogFile="ml-platform-consumer.log"}
+    @{Name="db-consumer";          Dir="services/database-service";  File="consumer.py";     LogFile="db-consumer.log"}
+    @{Name="embedding-consumer";   Dir="services/embedding-service"; File="consumer.py";     LogFile="embedding-consumer.log"}
 )
 
-$Script:allPorts = @(5432, 8000, 8001, 8002, 8003, 8005, 8006, 8007, 8080, 8081, 5173, 4173, 9092, 9200)
-$Script:infraPorts = @{PostgreSQL=5432; Kafka=9092; Elasticsearch=9200}
+$Script:allPorts = @(5434, 8000, 8001, 8003, 8005, 8006, 8007, 8080, 8081, 5173, 4173, 9092, 9200)
+$Script:infraPorts = @{PostgreSQL=5434; Kafka=9092; Elasticsearch=9200}
 $Script:envFile = Join-Path $Script:repoRoot ".env"
 
 # ===========================================================================
@@ -466,7 +465,6 @@ if (-not (Test-Path $Script:repoRoot)) {
 $requiredDirs = @(
     "services/modular-api",
     "services/ingest-service",
-    "services/ml-service",
     "services/database-service",
     "services/embedding-service",
     "services/energy-service",
@@ -603,7 +601,7 @@ if (-not $SkipInfra) {
     }
 
     Write-Step "Infrastructure Status"
-    Write-Ok "PostgreSQL is ready (port 5432)"
+    Write-Ok "PostgreSQL is ready (port 5434)"
     Write-Ok "Kafka is ready (port 9092)"
     Write-Ok "Elasticsearch is ready (port 9200)"
 } else {
@@ -741,7 +739,7 @@ $modSvc = $Script:svcList | Where-Object { $_.Name -eq "modular-api" } | Select-
 Start-ServiceWindow -Name $modSvc.Name -Script $modSvc.Script -Port $modSvc.Port -App $modSvc.App
 
 Write-Step "API Services Status"
-Write-Ok "All 7 API services are running and healthy"
+Write-Ok "All 6 API services are running and healthy"
 
 # ===========================================================================
 # PHASE 5: Kafka Consumers
@@ -897,7 +895,7 @@ Write-Host "  Elapsed time: $elapsed seconds" -ForegroundColor $script:cyanColor
 Write-Host ""
 
 Write-Host "  Infrastructure" -ForegroundColor $script:cyanColor
-Write-Host "    PostgreSQL:     localhost:5432" -ForegroundColor $script:greenColor
+Write-Host "    PostgreSQL:     localhost:5434" -ForegroundColor $script:greenColor
 Write-Host "    Kafka:          localhost:9092" -ForegroundColor $script:greenColor
 Write-Host "    Elasticsearch:  localhost:9200" -ForegroundColor $script:greenColor
 Write-Host ""

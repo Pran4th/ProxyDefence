@@ -4,7 +4,6 @@
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.analysis.extraPaths": [
     "${workspaceFolder}/services/ingest-service",
-    "${workspaceFolder}/services/ml-service",
     "${workspaceFolder}/services/embedding-service",
     "${workspaceFolder}/services/database-service",
     "${workspaceFolder}/services/energy-service",

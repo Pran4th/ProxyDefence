@@ -121,11 +121,52 @@ class RiskScoringEngine:
                 dim_signals = [s for s in active_signals if s["risk_dimension"] == dim]
                 scores[dim] = self._compute_dimension_score(dim_signals, risk_factors)
             scores["overall"] = max(scores.values()) if scores else 0.5
-            return scores
+            return await self._blend_with_ml(scores, entity_uuid, entity_type, active_signals)
 
         dim_signals = [s for s in active_signals if s["risk_dimension"] == dimension]
         score = self._compute_dimension_score(dim_signals, risk_factors)
         return {dimension: score, "overall": score}
+
+    ML_BLEND_WEIGHT = 0.4  # trained-model share of the blended overall score
+
+    async def _blend_with_ml(
+        self,
+        scores: dict[str, Any],
+        entity_uuid: str,
+        entity_type: str,
+        active_signals: list[asyncpg.Record],
+    ) -> dict[str, Any]:
+        """Blends the formula-based overall score with the trained GDELT
+        disruption classifier via MLBridge. Falls back silently to the
+        formula score if the ML Platform is unreachable."""
+        try:
+            from services.ml_bridge import MLBridge
+
+            tension = float(scores.get("geopolitical") or 0.0)
+            bridge = MLBridge(self._pool)
+            result = await bridge.predict_disruption_risk(
+                entity_type, entity_uuid,
+                features={
+                    "geopolitical_tension": tension,
+                    "regional_conflict": float(scores.get("operational") or 0.0),
+                },
+            )
+            if not result.fallback:
+                formula_overall = scores["overall"]
+                scores["overall"] = round(
+                    (1 - self.ML_BLEND_WEIGHT) * formula_overall
+                    + self.ML_BLEND_WEIGHT * result.score, 4,
+                )
+                scores["ml"] = {
+                    "score": round(result.score, 4),
+                    "formula_score": round(formula_overall, 4),
+                    "blend_weight": self.ML_BLEND_WEIGHT,
+                    "model_version": result.model_version,
+                    "latency_ms": round(result.latency_ms, 1),
+                }
+        except Exception as exc:
+            logger.warning("ml_blend_skipped", error=str(exc))
+        return scores
 
     def _compute_dimension_score(
         self,

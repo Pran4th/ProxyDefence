@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  Start all 3 Kafka consumers (ml, embedding, database) in separate windows.
+  Start all 3 Kafka consumers (ml-platform, embedding, database) in separate windows.
   Each consumer writes to its own log file.
 #>
 
@@ -11,9 +11,9 @@ $logDir = Join-Path $repoRoot "logs"
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 
 $consumers = @(
-    @{Name="ml-consumer";         Dir="services/ml-service";        File="consumer.py";     LogFile="ml-consumer.log"}
-    @{Name="db-consumer";         Dir="services/database-service";  File="consumer.py";     LogFile="db-consumer.log"}
-    @{Name="embedding-consumer";  Dir="services/embedding-service"; File="consumer.py";     LogFile="embedding-consumer.log"}
+    @{Name="ml-platform-consumer"; Dir="services/ml-platform";       File="consumer/article_enrichment.py"; LogFile="ml-platform-consumer.log"}
+    @{Name="db-consumer";          Dir="services/database-service";  File="consumer.py";     LogFile="db-consumer.log"}
+    @{Name="embedding-consumer";   Dir="services/embedding-service"; File="consumer.py";     LogFile="embedding-consumer.log"}
 )
 
 Write-Host "`n=== Starting Kafka Consumers ===" -ForegroundColor Cyan

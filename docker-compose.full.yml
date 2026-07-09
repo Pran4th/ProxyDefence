@@ -101,46 +101,6 @@ services:
       timeout: 5s
       retries: 5
 
-  ml-service:
-    build:
-      context: .
-      dockerfile: services/ml-service/Dockerfile
-    container_name: ml-service
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-    ports:
-      - "8002:8000"
-    networks:
-      - proxy_net
-    depends_on:
-      kafka:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  ml-consumer:
-    build:
-      context: .
-      dockerfile: services/ml-service/Dockerfile
-    container_name: ml-consumer
-    command: ["python", "consumer.py"]
-    restart: always
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-    networks:
-      - proxy_net
-    depends_on:
-      kafka:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f consumer.py || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-
   embedding-service:
     build:
       context: .
@@ -349,6 +309,37 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  # ml-platform's Kafka consumer — replaces the old ml-service/ml-consumer
+  # pair (services/ml-service/, retired). Same image as ml-platform, just
+  # runs consumer/article_enrichment.py instead of the FastAPI app.
+  ml-platform-consumer:
+    build:
+      context: .
+      dockerfile: services/ml-platform/Dockerfile
+    container_name: ml-platform-consumer
+    command: ["python", "consumer/article_enrichment.py"]
+    restart: always
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ML_PLATFORM_URL: http://ml-platform:8000
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - proxy_net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      ml-platform:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f article_enrichment.py || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # --- Frontend Application ---
   frontend:

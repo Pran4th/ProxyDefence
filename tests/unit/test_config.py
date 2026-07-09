@@ -1,5 +1,7 @@
 """Unit tests for backend.shared.config."""
 
+import pytest
+
 
 class TestServiceVersion:
     def test_default_version(self, monkeypatch):

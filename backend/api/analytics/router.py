@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 from backend.api.analytics.repository import AnalyticsRepository
 from backend.api.analytics.service import AnalyticsService
@@ -63,6 +63,16 @@ async def get_top_entities(request: Request):
         return await service.get_top_entities()
     except Exception:
         raise error_response(code="ANALYTICS_ERROR", message="Failed to fetch entity analytics", status_code=500)
+
+
+@router.get("/events")
+async def get_top_events(request: Request, limit: int = Query(20, ge=1, le=100)):
+    try:
+        repo = AnalyticsRepository(request.app.state.pg_pool)
+        service = AnalyticsService(repo)
+        return await service.get_top_events(limit)
+    except Exception:
+        raise error_response(code="ANALYTICS_ERROR", message="Failed to fetch event analytics", status_code=500)
 
 
 @router.get("/topics")

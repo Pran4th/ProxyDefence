@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   BarChart3,
   Cpu,
-  Globe2,
   CalendarDays,
   LogOut,
   Settings,
@@ -12,8 +11,6 @@ import {
   UserCircle2,
   Bot,
   FileText,
-  Bell,
-  ShieldCheck,
   Search as SearchIcon,
   Zap,
   Map,
@@ -24,52 +21,22 @@ import {
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
-import logo from "@/assets/logo.png";
+import Logo from "@/components/Logo";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/entities", label: "Entities", icon: Globe2 },
   { to: "/simulations", label: "Simulations", icon: Cpu },
-  { to: "/profile", label: "Profile", icon: Settings },
-  { to: "/events", label: "Events", icon: CalendarDays },
-  {to: "/search",label: "Search",icon: SearchIcon},
-  {
-  to: "/copilot",
-  label: "Copilot",
-  icon: Bot,
-},
-{
-  to: "/briefings",
-  label: "Briefings",
-  icon: FileText,
-},
-{
-  to: "/alerts",
-  label: "Alerts",
-  icon: Bell,
-},
-{
-  to: "/watchlists",
-  label: "Watchlists",
-  icon: ShieldCheck,
-},
-{
-  to: "/cases",
-  label: "Cases",
-  icon: Shield,
-},
-{
-  to: "/reports",
-  label: "Reports",
-  icon: FileText,
-},
+  { to: "/search", label: "Search", icon: SearchIcon },
+  { to: "/copilot", label: "Copilot", icon: Bot },
+  { to: "/briefings", label: "Briefings", icon: CalendarDays },
+  { to: "/cases", label: "Cases & Reports", icon: FileText },
   { to: "/energy/analytics", label: "Energy Analytics", icon: Zap },
   { to: "/energy/map", label: "Energy Map", icon: Map },
   { to: "/risk", label: "Risk Intelligence", icon: AlertTriangle },
-  { to: "/intelligence/digital-twin", label: "Digital Twin", icon: Cpu },
   { to: "/intelligence/procurement", label: "Procurement", icon: ShoppingCart },
   { to: "/intelligence/spr", label: "SPR Reserves", icon: Droplets },
+  { to: "/profile", label: "Profile", icon: Settings },
 ];
 
 const AppShell = ({
@@ -89,7 +56,7 @@ const AppShell = ({
         <aside className="hidden w-72 border-r border-border bg-card/60 backdrop-blur xl:flex xl:flex-col">
           <div className="border-b border-border px-6 py-5">
             <Link to="/" className="flex items-center gap-3">
-              <img src={logo} alt="ProxyDefence" className="h-9 w-9 rounded-lg" />
+              <Logo className="h-9 w-9" />
               <div className="leading-tight">
                 <p className="font-display text-lg tracking-tight text-foreground">ProxyDefence</p>
                 <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">

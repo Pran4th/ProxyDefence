@@ -12,12 +12,6 @@ export interface EntityProfile {
   last_seen: string;
 }
 
-export interface EntityRelationship {
-  source_entity: string;
-  target_entity: string;
-  relationship_type: string;
-  confidence: number;
-}
 export interface Article {
   id: number;
   article_id: number;
@@ -140,18 +134,10 @@ export interface Event {
   risk_level: string;
   confidence: number;
   article_count: number;
+  last_seen?: string;
+  updated_at?: string;
 }
 
-export interface EventEntity {
-  entity_text: string;
-  entity_type: string;
-  mention_count: number;
-  avg_confidence: number;
-}
-
-export interface EventDetails extends Event {
-  entities: EventEntity[];
-}
 export interface AuthResponse {
   access_token: string;
   token_type: string;
@@ -161,27 +147,8 @@ export interface SearchResponse {
   query: string;
   total_results: number;
   results: Article[];
-}
-export interface Alert {
-  id: number;
-  watchlist_id: number | null;
-  entity_text: string | null;
-  event_id: number | null;
-  alert_type: string;
-  message: string;
-  risk_score: number;
-  status: string;
-  created_at: string;
-}
-
-export interface Watchlist {
-  id: number;
-  name: string;
-  description: string | null;
-  owner_id: number | null;
-  created_at: string;
-  updated_at: string;
-  entities: string[];
+  limit: number;
+  offset: number;
 }
 
 export interface Case {
@@ -216,6 +183,7 @@ export interface IntelligenceReport {
   confidence_score: number;
   recommendations: string[];
   source_article_ids: number[];
+  source_case_id: number | null;
   created_by: number | null;
   created_at: string;
 }
@@ -470,6 +438,35 @@ export const fetchAnalyticsSummary = async () => {
   return response.data;
 };
 
+export interface PublicPreviewArticle {
+  title: string;
+  source: string;
+  topic: string;
+  summary: string;
+  risk_level: string;
+  threat_score: number;
+  sentiment: string;
+  published_at: string;
+}
+
+export interface PublicPreview {
+  articles: PublicPreviewArticle[];
+  stats: {
+    total_articles: number;
+    high_risk_articles: number;
+    avg_confidence: number;
+    avg_threat_score: number;
+    trained_models: number;
+    datasets: number;
+  };
+}
+
+/** Unauthenticated preview data for the landing page — works before sign-in. */
+export const fetchPublicPreview = async () => {
+  const response = await api.get<PublicPreview>("/public/preview");
+  return response.data;
+};
+
 export const fetchDashboardStats = async () => {
   const response = await api.get<DashboardV2>(
     "/analytics/dashboard-v2"
@@ -503,12 +500,16 @@ export const fetchTopicBreakdown = async () => {
   return response.data;
 };
 
-export const searchArticles = async (query: string) => {
+export const searchArticles = async (
+  query: string,
+  filters?: { topic?: string; risk_level?: string; limit?: number; offset?: number }
+) => {
   const response = await api.get<SearchResponse>(
     "/search",
     {
       params: {
         q: query,
+        ...filters,
       },
     }
   );
@@ -527,111 +528,13 @@ export const fetchNetworkGraph = async () => {
   const response = await api.get<NetworkGraphData>("/graph/network");
   return response.data;
 };
-export const fetchEntities = async () => {
-  const response = await api.get("/entities");
+export const fetchTopEvents = async (limit = 20) => {
+  const response = await api.get<Event[]>("/analytics/events", {
+    params: { limit },
+  });
   return response.data;
 };
 
-export const fetchEntityProfile = async (entity: string) => {
-  const response = await api.get(
-    `/entities/${encodeURIComponent(entity)}`
-  );
-  return response.data;
-};
-
-export const fetchEntityArticles = async (entity: string) => {
-  const response = await api.get(
-    `/entities/${encodeURIComponent(entity)}/articles`
-  );
-  return response.data;
-};
-
-export const fetchEntityRelationships = async (
-  entity: string
-) => {
-  const response = await api.get(
-    `/entities/${encodeURIComponent(entity)}/relationships`
-  );
-  return response.data;
-};
-export const fetchEvents = async () => {
-  const response = await api.get<Event[]>("/events");
-  return response.data;
-};
-
-export const fetchEvent = async (eventId: number) => {
-  const response = await api.get<EventDetails>(
-    `/events/${eventId}`
-  );
-  return response.data;
-};
-
-export const fetchEventArticles = async (
-  eventId: number
-) => {
-  const response = await api.get<Article[]>(
-    `/events/${eventId}/articles`
-  );
-  return response.data;
-};
-export const fetchAlerts = async () => {
-  const response = await api.get<Alert[]>(
-    "/alerts"
-  );
-
-  return response.data;
-};
-
-export const fetchAlert = async (
-  alertId: number
-) => {
-  const response = await api.get<Alert>(
-    `/alerts/${alertId}`
-  );
-
-  return response.data;
-};
-
-
-export const generateAlerts = async () => {
-  const response = await api.post(
-    "/alerts/generate"
-  );
-
-  return response.data;
-};
-export const fetchWatchlists = async () => {
-  const response = await api.get<Watchlist[]>(
-    "/watchlists"
-  );
-
-  return response.data;
-};
-
-export const createWatchlist = async (
-  payload: {
-    name: string;
-    description?: string;
-    entities?: string[];
-  }
-) => {
-  const response = await api.post(
-    "/watchlists",
-    payload
-  );
-
-  return response.data;
-};
-
-export const fetchWatchlist = async (
-  watchlistId: number
-) => {
-  const response = await api.get<Watchlist>(
-    `/watchlists/${watchlistId}`
-  );
-
-  return response.data;
-};
 export const fetchCases = async () => {
   const response = await api.get<Case[]>(
     "/cases"
@@ -681,7 +584,7 @@ export const addCaseNote = async (
 export const fetchReports = async () => {
   const response = await api.get<
     IntelligenceReport[]
-  >("/reports");
+  >("/cases/reports");
 
   return response.data;
 };
@@ -691,7 +594,7 @@ export const fetchReport = async (
 ) => {
   const response = await api.get<
     IntelligenceReport
-  >(`/reports/${reportId}`);
+  >(`/cases/reports/${reportId}`);
 
   return response.data;
 };
@@ -700,29 +603,7 @@ export const generateCaseReport = async (
   caseId: number
 ) => {
   const response = await api.post(
-    `/reports/case/${caseId}`
-  );
-
-  return response.data;
-};
-export const addWatchlistEntity = async (
-  watchlistId: number,
-  entityText: string
-) => {
-  const response = await api.post(
-    `/watchlists/${watchlistId}/entities`,
-    {
-      entity_text: entityText,
-    }
-  );
-
-  return response.data;
-};
-export const deleteWatchlist = async (
-  watchlistId: number
-) => {
-  const response = await api.delete(
-    `/watchlists/${watchlistId}`
+    `/cases/${caseId}/report`
   );
 
   return response.data;

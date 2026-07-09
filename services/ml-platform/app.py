@@ -27,7 +27,7 @@ from routers import (
     research_execution, research_leaderboard, research_reports,
     connectors, ingestion, normalization, data_quality,
     feature_pipelines, explorer_dashboard, data_acquisition,
-    gdelt_pipeline, dataset_factory,
+    gdelt_pipeline, dataset_factory, risk,
 )
 
 setup_structlog("ml-platform")
@@ -105,6 +105,7 @@ app.include_router(explorer_dashboard.router)
 app.include_router(data_acquisition.router)
 app.include_router(gdelt_pipeline.router)
 app.include_router(dataset_factory.router)
+app.include_router(risk.router)
 
 
 @app.get("/")

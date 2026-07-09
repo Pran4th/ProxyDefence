@@ -69,6 +69,8 @@ async def bulk_import(
     for i, record in enumerate(records):
         try:
             _table = record.pop("_table", table)
+            if _table not in ENTITY_TABLE_NAMES:
+                raise ValueError(f"Unknown entity type in record '_table': {_table}")
             invalid = sorted(set(record) - CATALOG_WRITABLE_COLUMNS)
             if invalid:
                 raise ValueError(f"Unknown or read-only fields: {', '.join(invalid)}")

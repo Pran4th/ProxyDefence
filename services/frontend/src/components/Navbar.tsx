@@ -5,10 +5,11 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
-import logo from "@/assets/logo.png";
+import Logo from "@/components/Logo";
 
 const navLinks = [
   { to: "/", label: "Home" },
+  { to: "/#capabilities", label: "Capabilities" },
   { to: "/about", label: "About" },
   { to: "/news", label: "Intel Feed" },
 ];
@@ -24,7 +25,7 @@ const Navbar = () => {
     <nav className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-3">
-          <img src={logo} alt="ProxyDefence Logo" className="h-9 w-9 rounded-lg" />
+          <Logo className="h-9 w-9" />
           <div className="leading-tight">
             <p className="font-display text-lg tracking-tight text-foreground">ProxyDefence</p>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">

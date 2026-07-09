@@ -627,6 +627,9 @@ class WorldPortIndexParser(BaseParser):
     async def to_canonical(self, records: list[dict]) -> list[dict]:
         canonical: list[dict] = []
         for rec in records:
+            if "portname" in rec:
+                canonical.append(self._traffic_record_to_canonical(rec))
+                continue
             lat = self._safe_float(rec.get("latitude"))
             lon = self._safe_float(rec.get("longitude"))
             canonical.append({
@@ -659,6 +662,44 @@ class WorldPortIndexParser(BaseParser):
                 "metadata": {"parser": "WorldPortIndexParser", "version": "1.0"},
             })
         return canonical
+
+    def _traffic_record_to_canonical(self, rec: dict) -> dict:
+        """Maps the global port-traffic schema (portid/portname/vessel_count_*) to canonical."""
+        return {
+            "entity_type": "port",
+            "entity_id": rec.get("portid") or rec.get("LOCODE") or rec.get("portname", ""),
+            "entity_name": rec.get("portname", ""),
+            "timestamp": None,
+            "timestamp_precision": None,
+            "latitude": self._safe_float(rec.get("lat")),
+            "longitude": self._safe_float(rec.get("lon")),
+            "location_name": rec.get("fullname") or rec.get("portname"),
+            "location_code": rec.get("LOCODE") or None,
+            "attributes": {
+                "port_name": rec.get("portname"),
+                "country": rec.get("country"),
+                "country_code": rec.get("ISO3"),
+                "continent": rec.get("continent"),
+                "vessel_count_total": self._safe_float(rec.get("vessel_count_total")),
+                "vessel_count_container": self._safe_float(rec.get("vessel_count_container")),
+                "vessel_count_dry_bulk": self._safe_float(rec.get("vessel_count_dry_bulk")),
+                "vessel_count_general_cargo": self._safe_float(rec.get("vessel_count_general_cargo")),
+                "vessel_count_roro": self._safe_float(rec.get("vessel_count_RoRo")),
+                "vessel_count_tanker": self._safe_float(rec.get("vessel_count_tanker")),
+                "industry_top1": rec.get("industry_top1"),
+                "industry_top2": rec.get("industry_top2"),
+                "industry_top3": rec.get("industry_top3"),
+                "share_country_maritime_import": self._safe_float(rec.get("share_country_maritime_import")),
+                "share_country_maritime_export": self._safe_float(rec.get("share_country_maritime_export")),
+            },
+            "relationships": [
+                {"type": "located_in_country", "target_id": rec.get("ISO3")},
+            ],
+            "source": "global_port_traffic",
+            "source_record_id": rec.get("portid"),
+            "confidence": None,
+            "metadata": {"parser": "WorldPortIndexParser", "version": "1.0", "schema": "global_port_traffic"},
+        }
 
     def _safe_float(self, value: str | None) -> float | None:
         if value is None or value.strip() == "":

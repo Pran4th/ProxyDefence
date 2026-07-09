@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS reports (
     confidence_score FLOAT DEFAULT 0,
     recommendations JSONB DEFAULT '[]'::jsonb,
     source_article_ids INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+    source_case_id INTEGER,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -182,6 +183,18 @@ CREATE TABLE IF NOT EXISTS cases (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'reports_source_case_id_fkey'
+    ) THEN
+        ALTER TABLE reports
+            ADD CONSTRAINT reports_source_case_id_fkey
+            FOREIGN KEY (source_case_id) REFERENCES cases(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS case_items (
     case_id INTEGER REFERENCES cases(id) ON DELETE CASCADE,

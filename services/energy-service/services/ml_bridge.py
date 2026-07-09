@@ -1,9 +1,11 @@
 """ML Bridge — connects risk engine to ML Platform with rule-based fallback.
 
-The bridge tries the ML Platform first, then falls back to rule-based
+The bridge tries the ML Platform first (trained GDELT disruption classifier
+served at /api/v1/risk/disruption-score), then falls back to rule-based
 scoring if the platform is unavailable or the model is not deployed."""
 
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -20,7 +22,7 @@ TABLE_BY_ASSET_TYPE = {v: k for k, v in ASSET_TYPE_BY_TABLE.items()}
 
 logger = get_logger(__name__)
 
-ML_PLATFORM_URL = "http://ml-platform:8007"
+ML_PLATFORM_URL = os.getenv("ML_PLATFORM_URL", "http://ml-platform:8007")
 ML_TIMEOUT = 5.0
 
 
@@ -56,15 +58,28 @@ class MLBridge:
 
         try:
             import httpx
+            features = features or {}
+            # translate bridge-level signals into the risk endpoint's contract:
+            # hostile media tone scales with observed tension/conflict signals
+            tension = max(
+                features.get("geopolitical_tension", 0.0),
+                features.get("regional_conflict", 0.0),
+                features.get("military_tension", 0.0),
+            )
+            payload = {
+                "country": features.get("country", ""),
+                "avg_tone": -1.0 - 8.0 * tension,
+                "num_mentions": 10 + 200 * tension,
+                "num_sources": 2 + 20 * tension,
+                "num_articles": 10 + 200 * tension,
+                "is_root_event": 1,
+                "entity_type": entity_type,
+                "entity_uuid": entity_uuid,
+            }
             async with httpx.AsyncClient(timeout=ML_TIMEOUT) as client:
                 resp = await client.post(
-                    f"{ML_PLATFORM_URL}/api/v1/predict",
-                    json={
-                        "model_name": "disruption_risk",
-                        "features": features or {},
-                        "entity_type": entity_type,
-                        "entity_uuid": entity_uuid,
-                    },
+                    f"{ML_PLATFORM_URL}/api/v1/risk/disruption-score",
+                    json=payload,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -73,8 +88,8 @@ class MLBridge:
                     return PredictionResult(
                         score=float(data.get("prediction", 0.5)),
                         confidence=float(data.get("confidence", 0.8)),
-                        model_version=data.get("model_version"),
-                        feature_version=data.get("feature_version"),
+                        model_version=str(data.get("model_version")),
+                        feature_version=str(data.get("feature_version")),
                         latency_ms=latency,
                         fallback=False,
                         probabilities=data.get("probabilities"),

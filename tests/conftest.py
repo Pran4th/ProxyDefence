@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from backend.api_service.main import app
+from backend.api.app import app
 from backend.shared.settings import settings
 
 # ── Test configuration ────────────────────────────────────────────

@@ -15,6 +15,13 @@ logger = get_logger(__name__)
 OFAC_FIELDS = ["ent_num", "sdn_name", "sdn_type", "program", "list", "score", "remarks"]
 UN_SANCTIONS_FIELDS = ["individual_name", "entity_name", "identifier", "type", "sanctions_program", "listed_date"]
 
+# Official Treasury sdn.csv layout: no header row, fixed 12-column position.
+# https://www.treasury.gov/ofac/downloads/sdn.csv
+OFAC_SDN_RAW_COLUMNS = [
+    "ent_num", "sdn_name", "sdn_type", "program", "title", "call_sign",
+    "vess_type", "tonnage", "grt", "vess_flag", "vess_owner", "remarks",
+]
+
 
 class OFACParser(BaseParser):
     @property
@@ -85,26 +92,58 @@ class OFACParser(BaseParser):
                     errors.append({"uid": entry.get("ent_num", ""), "error": str(e)})
         else:
             with open(input_path, "r", encoding=encoding) as f:
-                reader = csv.DictReader(f)
-                for row_idx, row in enumerate(reader):
-                    if max_records is not None and records_parsed >= max_records:
-                        break
-                    try:
-                        rec = {
-                            "ent_num": row.get("ent_num", row.get("uid", row.get("ENT_NUM", ""))),
-                            "sdn_name": row.get("sdn_name", row.get("name", row.get("SDN_NAME", ""))),
-                            "sdn_type": row.get("sdn_type", row.get("type", row.get("SDN_TYPE", ""))),
-                            "program": row.get("program", row.get("Program", row.get("programs", ""))),
-                            "list": row.get("list", row.get("List", "")),
-                            "score": row.get("score", row.get("Score", "")),
-                            "remarks": row.get("remarks", row.get("Remarks", "")),
-                        }
-                        canonical = await self.to_canonical([rec])
-                        canonical_records.extend(canonical)
-                        records_parsed += 1
-                    except Exception as e:
-                        records_failed += 1
-                        errors.append({"row": row_idx, "error": str(e)})
+                sniff = f.readline()
+                f.seek(0)
+                first_field = sniff.split(",", 1)[0].strip().strip('"')
+                is_headerless_sdn = first_field.isdigit()
+
+                if is_headerless_sdn:
+                    reader = csv.reader(f)
+                    for row_idx, fields in enumerate(reader):
+                        if max_records is not None and records_parsed >= max_records:
+                            break
+                        if not fields or not fields[0].strip():
+                            continue
+                        try:
+                            padded = fields + [""] * (len(OFAC_SDN_RAW_COLUMNS) - len(fields))
+                            raw = dict(zip(OFAC_SDN_RAW_COLUMNS, padded))
+                            na = lambda v: "" if v.strip() in ("-0-", "") else v.strip()
+                            rec = {
+                                "ent_num": na(raw["ent_num"]),
+                                "sdn_name": na(raw["sdn_name"]),
+                                "sdn_type": na(raw["sdn_type"]),
+                                "program": na(raw["program"]),
+                                "list": "SDN",
+                                "score": "",
+                                "remarks": na(raw["remarks"]),
+                            }
+                            canonical = await self.to_canonical([rec])
+                            canonical_records.extend(canonical)
+                            records_parsed += 1
+                        except Exception as e:
+                            records_failed += 1
+                            errors.append({"row": row_idx, "error": str(e)})
+                else:
+                    reader = csv.DictReader(f)
+                    for row_idx, row in enumerate(reader):
+                        if max_records is not None and records_parsed >= max_records:
+                            break
+                        try:
+                            rec = {
+                                "ent_num": row.get("ent_num", row.get("uid", row.get("ENT_NUM", ""))),
+                                "sdn_name": row.get("sdn_name", row.get("name", row.get("SDN_NAME", ""))),
+                                "sdn_type": row.get("sdn_type", row.get("type", row.get("SDN_TYPE", ""))),
+                                "program": row.get("program", row.get("Program", row.get("programs", ""))),
+                                "list": row.get("list", row.get("List", "")),
+                                "score": row.get("score", row.get("Score", "")),
+                                "remarks": row.get("remarks", row.get("Remarks", "")),
+                            }
+                            canonical = await self.to_canonical([rec])
+                            canonical_records.extend(canonical)
+                            records_parsed += 1
+                        except Exception as e:
+                            records_failed += 1
+                            errors.append({"row": row_idx, "error": str(e)})
 
         with open(output_path, "w", encoding="utf-8", newline="") as out_f:
             if canonical_records:

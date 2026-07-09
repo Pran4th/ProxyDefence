@@ -40,7 +40,6 @@ fi
 
 SERVICES=(
     "ingest-service:services/ingest-service:requirements.txt"
-    "ml-service:services/ml-service:requirements.txt"
     "embedding-service:services/embedding-service:requirements.txt"
     "database-service:services/database-service:requirements.txt"
     "energy-service:services/energy-service:requirements.txt"
@@ -86,14 +85,14 @@ done
 
 # --- spaCy model ---
 echo ""
-echo "--- spaCy Model (ml-service) ---"
-ML_PYTHON="$REPO_ROOT/services/ml-service/.venv/bin/python"
+echo "--- spaCy Model (ml-platform) ---"
+ML_PYTHON="$REPO_ROOT/services/ml-platform/.venv/bin/python"
 if [ -f "$ML_PYTHON" ]; then
     if "$ML_PYTHON" -c "import spacy; spacy.load('en_core_web_sm')" 2>/dev/null; then
         echo "  spaCy model: found"
     else
         echo "  Downloading en_core_web_sm..."
-        "$REPO_ROOT/services/ml-service/.venv/bin/pip" install --quiet \
+        "$REPO_ROOT/services/ml-platform/.venv/bin/pip" install --quiet \
             "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl" \
             && echo "  spaCy model: downloaded" || echo "  WARNING: download failed"
     fi

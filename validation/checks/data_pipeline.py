@@ -75,7 +75,7 @@ class KafkaConsumerGroupsRegistered(BaseCheck):
             groups_available = c.list_topics(timeout=self.config.kafka_timeout)
             c.close()
 
-            required_groups = {"ml-service", "database-service", "embedding-service"}
+            required_groups = {"ml-platform", "database-service", "embedding-service"}
             # confluent_kafka doesn't directly list groups; we check by their existence indirectly
             return CheckResult(
                 name=self.name, passed=True, warning=True,

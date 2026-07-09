@@ -27,13 +27,12 @@ import {
 } from "@/components/ui/card";
 import {
   fetchDashboardStats,
-  fetchEvents,
+  fetchTopEvents,
   fetchNetworkGraph,
   fetchThreatAnalytics,
   type Article,
   type AttackGraphData,
   type DashboardV2,
-  type Event,
 } from "@/lib/api";
 
 type Severity = "low" | "medium" | "high" | "critical";
@@ -244,7 +243,7 @@ const Dashboard = () => {
     Promise.all([
       fetchDashboardStats(),
       fetchThreatAnalytics(),
-      fetchEvents(),
+      fetchTopEvents(),
       fetchNetworkGraph(),
     ])
       .then(([statsData, threatData, eventData, networkData]) => {
@@ -276,9 +275,7 @@ const Dashboard = () => {
         );
         setArticles(
           eventData.slice(0, 5).map((event) => {
-            const timestamp = (event as Event & { last_seen?: string; updated_at?: string }).last_seen
-              ?? (event as Event & { last_seen?: string; updated_at?: string }).updated_at
-              ?? new Date().toISOString();
+            const timestamp = event.last_seen ?? event.updated_at ?? new Date().toISOString();
 
             return {
               id: event.id,

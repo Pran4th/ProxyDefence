@@ -6,7 +6,7 @@
   Displays real-time log output from all services.
   If no service filter is provided, shows all logs merged.
 .PARAMETER Service
-  Filter to a specific service. Values: ingest, ml, database, embedding, energy, ml-platform, modular-api, frontend, ml-consumer, db-consumer, embedding-consumer.
+  Filter to a specific service. Values: ingest, database, embedding, energy, ml-platform, modular-api, frontend, ml-platform-consumer, db-consumer, embedding-consumer.
 .PARAMETER Lines
   Number of most recent lines to show per service (default: 10).
 .PARAMETER Follow
@@ -28,14 +28,13 @@ $Cyan = "Cyan"; $Green = "Green"; $Yellow = "Yellow"; $Gray = "Gray"
 
 $logFiles = @{
     "ingest"              = "ingest.log"
-    "ml"                  = "ml.log"
     "database"            = "database.log"
     "embedding"           = "embedding.log"
     "energy"              = "energy.log"
     "ml-platform"         = "ml-platform.log"
     "modular-api"         = "modular-api.log"
     "frontend"            = "frontend.log"
-    "ml-consumer"         = "ml-consumer.log"
+    "ml-platform-consumer"= "ml-platform-consumer.log"
     "db-consumer"         = "db-consumer.log"
     "embedding-consumer"  = "embedding-consumer.log"
 }

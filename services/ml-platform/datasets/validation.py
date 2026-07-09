@@ -46,7 +46,8 @@ def check_outliers(df: pd.DataFrame, zscore_threshold: float = 3.0) -> Validatio
     for col in num_df.columns:
         col_data = num_df[col].dropna()
         if len(col_data) > 0:
-            zs = np.abs((col_data - col_data.mean()) / col_data.std().clip(lower=1e-10))
+            std = max(float(col_data.std()), 1e-10)
+            zs = np.abs((col_data - col_data.mean()) / std)
             outlier_count += int((zs > zscore_threshold).sum())
     n_total = int(num_df.size)
     outlier_rate = outlier_count / n_total if n_total > 0 else 0.0

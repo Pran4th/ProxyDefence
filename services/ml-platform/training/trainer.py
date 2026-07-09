@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -6,25 +7,42 @@ import pandas as pd
 from backend.shared.logging_config import get_logger
 from config import ARTIFACT_DIR, DATASET_DIR
 from db import get_pool
-from training.models import MODEL_REGISTRY, BaseModelWrapper
+from training.models import MODEL_REGISTRY, REGRESSION_MODEL_REGISTRY, BaseModelWrapper
 from training.experiment import ExperimentTracker
 from evaluation.classification import evaluate_classification
+from evaluation.regression import evaluate_regression
 
 logger = get_logger(__name__)
 
 
+def _scalar_metrics(metrics: dict[str, Any]) -> dict[str, float]:
+    return {k: float(v) for k, v in metrics.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+
+
 class ModelTrainer:
     def __init__(self, model_type: str, parameters: dict[str, Any] | None = None,
-                 random_seed: int = 42):
-        if model_type not in MODEL_REGISTRY:
-            raise ValueError(f"Unknown model type: {model_type}. Available: {list(MODEL_REGISTRY.keys())}")
-        wrapper_cls = MODEL_REGISTRY[model_type]
+                 random_seed: int = 42, task: str = "classification"):
+        if task == "classification":
+            registry = MODEL_REGISTRY
+        elif task == "regression":
+            registry = REGRESSION_MODEL_REGISTRY
+        else:
+            raise ValueError(f"Unknown task: {task}. Available: classification, regression")
+        if model_type not in registry:
+            raise ValueError(f"Unknown model type: {model_type}. Available for {task}: {list(registry.keys())}")
+        wrapper_cls = registry[model_type]
         params = parameters or {}
         params.setdefault("random_state", random_seed)
         self._model: BaseModelWrapper = wrapper_cls(**params)
         self._model_type = model_type
         self._random_seed = random_seed
+        self._task = task
         self._experiment = ExperimentTracker()
+
+    def _evaluate(self, y_true, preds, proba) -> dict[str, Any]:
+        if self._task == "regression":
+            return evaluate_regression(y_true, preds)
+        return evaluate_classification(y_true, preds, proba)
 
     async def train(self, model_name: str, X_train: pd.DataFrame, y_train: pd.Series,
                     X_val: pd.DataFrame | None = None, y_val: pd.Series | None = None,
@@ -45,16 +63,16 @@ class ModelTrainer:
         elapsed = time.time() - start_time
 
         train_preds = self._model.predict(X_train)
-        train_proba = self._model.predict_proba(X_train)
-        train_metrics = evaluate_classification(y_train, train_preds, train_proba)
-        self._experiment.log_metrics({f"train_{k}": v for k, v in train_metrics.items()})
+        train_proba = self._model.predict_proba(X_train) if self._task == "classification" else None
+        train_metrics = self._evaluate(y_train, train_preds, train_proba)
+        self._experiment.log_metrics(_scalar_metrics({f"train_{k}": v for k, v in train_metrics.items()}))
 
         val_metrics = {}
         if X_val is not None and y_val is not None:
             val_preds = self._model.predict(X_val)
-            val_proba = self._model.predict_proba(X_val)
-            val_metrics = evaluate_classification(y_val, val_preds, val_proba)
-            self._experiment.log_metrics({f"val_{k}": v for k, v in val_metrics.items()})
+            val_proba = self._model.predict_proba(X_val) if self._task == "classification" else None
+            val_metrics = self._evaluate(y_val, val_preds, val_proba)
+            self._experiment.log_metrics(_scalar_metrics({f"val_{k}": v for k, v in val_metrics.items()}))
 
         artifact_dir = Path(ARTIFACT_DIR) / model_name / f"v{dataset_version or 0}"
         artifact_dir.mkdir(parents=True, exist_ok=True)

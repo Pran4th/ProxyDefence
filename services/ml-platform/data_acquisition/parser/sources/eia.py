@@ -358,16 +358,31 @@ class FREDParser(BaseParser):
         elif suffix == ".csv":
             with open(input_path, "r", encoding=encoding) as f:
                 reader = csv.DictReader(f)
+                fieldnames = reader.fieldnames or []
+                # fredgraph.csv export format: observation_date,<SERIES_ID>
+                fredgraph_series = (
+                    fieldnames[1]
+                    if len(fieldnames) == 2 and fieldnames[0] == "observation_date"
+                    else None
+                )
                 for row in reader:
                     if max_records is not None and records_parsed >= max_records:
                         break
                     try:
-                        rec = {
-                            "series_id": series_id or row.get("series_id", ""),
-                            "date": row.get("date", ""),
-                            "value": row.get("value"),
-                            "name": row.get("name", row.get("series_name", "")),
-                        }
+                        if fredgraph_series:
+                            rec = {
+                                "series_id": fredgraph_series,
+                                "date": row.get("observation_date", ""),
+                                "value": row.get(fredgraph_series),
+                                "name": fredgraph_series,
+                            }
+                        else:
+                            rec = {
+                                "series_id": series_id or row.get("series_id", ""),
+                                "date": row.get("date", ""),
+                                "value": row.get("value"),
+                                "name": row.get("name", row.get("series_name", "")),
+                            }
                         canonical = await self.to_canonical([rec])
                         canonical_records.extend(canonical)
                         records_parsed += 1

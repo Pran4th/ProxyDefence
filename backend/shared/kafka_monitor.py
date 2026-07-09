@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 KAFKA_BOOTSTRAP_SERVERS = settings.KAFKA_BOOTSTRAP_SERVERS
 
 CONSUMER_GROUPS = {
-    "ml-service-group": "raw_articles",
+    "ml-platform-consumer-group": "raw_articles",
     "db-service-group": "processed_articles",
     "embedding-service-group": "processed_articles",
 }

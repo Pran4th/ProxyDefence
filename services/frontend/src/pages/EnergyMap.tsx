@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Map, Layers, Anchor, Droplets, Factory, Pipette, Zap, Warehouse, Building2, Ship, Waypoints, Fuel, Filter } from "lucide-react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { Map as MapIcon, Layers, Anchor, Droplets, Factory, Pipette, Zap, Warehouse, Building2, Ship, Waypoints, Fuel, AlertTriangle } from "lucide-react";
 
 import AppShell from "@/components/AppShell";
 import { fetchEntities } from "@/lib/api-energy";
 import { Button } from "@/components/ui/button";
-import type { Port, OilField, Pipeline, Refinery, PowerPlant, StorageFacility, StrategicPetroleumReserve, ShippingRoute, ImportCorridor, GasField, Location } from "@/types/energy";
 
 type AssetEntry = {
   type: string;
@@ -19,6 +20,7 @@ type AssetEntry = {
 };
 
 const assetConfig: Record<string, { label: string; color: string; icon: React.ComponentType<any> }> = {
+  chokepoints: { label: "Chokepoints", color: "#ff2d55", icon: AlertTriangle },
   ports: { label: "Ports", color: "#2563eb", icon: Anchor },
   oil_fields: { label: "Oil Fields", color: "#7c3aed", icon: Droplets },
   gas_fields: { label: "Gas Fields", color: "#06b6d4", icon: Fuel },
@@ -32,16 +34,59 @@ const assetConfig: Record<string, { label: string; color: string; icon: React.Co
 };
 
 const TABLE_LIST = [
-  "ports", "oil_fields", "gas_fields", "pipelines", "refineries",
+  "chokepoints", "ports", "oil_fields", "gas_fields", "pipelines", "refineries",
   "power_plants", "storage_facilities", "strategic_petroleum_reserves",
   "shipping_routes", "import_corridors",
 ];
 
-const toLng = (lng: number) => ((lng + 180) / 360) * 1000;
-const toLat = (lat: number) => ((90 - lat) / 180) * 500;
+// Free dark raster basemap (CARTO), no API key required.
+const MAP_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    carto: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    },
+  },
+  layers: [{ id: "carto", type: "raster", source: "carto" }],
+};
+
+const colorMatchExpression = (): maplibregl.ExpressionSpecification => {
+  const expr: any[] = ["match", ["get", "type"]];
+  for (const [type, cfg] of Object.entries(assetConfig)) {
+    expr.push(type, cfg.color);
+  }
+  expr.push("#94a3b8");
+  return expr as maplibregl.ExpressionSpecification;
+};
+
+const toGeoJSON = (assets: AssetEntry[]): GeoJSON.FeatureCollection => ({
+  type: "FeatureCollection",
+  features: assets.map((a, idx) => ({
+    type: "Feature",
+    id: idx,
+    geometry: { type: "Point", coordinates: [a.lng, a.lat] },
+    properties: {
+      idx,
+      type: a.type,
+      name: a.name,
+      importance: a.importance ?? 50,
+      isChokepoint: a.type === "chokepoints" ? 1 : 0,
+    },
+  })),
+});
 
 const EnergyMap = () => {
   const navigate = useNavigate();
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const [assets, setAssets] = useState<AssetEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>(
@@ -49,15 +94,35 @@ const EnergyMap = () => {
   );
   const [selectedAsset, setSelectedAsset] = useState<AssetEntry | null>(null);
 
+  // load assets from energy-service
   useEffect(() => {
     let cancelled = false;
     const loadAll = async () => {
       const all: AssetEntry[] = [];
+      try {
+        const CHOKEPOINT_TYPES = new Set(["strait", "canal", "strategic_area"]);
+        const locs = await fetchEntities<any>("locations", { limit: 500 });
+        for (const item of locs.items || []) {
+          if (CHOKEPOINT_TYPES.has(item.location_type) && item.latitude != null && item.longitude != null) {
+            all.push({
+              type: "chokepoints",
+              name: item.name || "Chokepoint",
+              lat: Number(item.latitude),
+              lng: Number(item.longitude),
+              uuid: item.uuid || "",
+              criticality: "critical",
+              importance: 100,
+              extra: item,
+            });
+          }
+        }
+      } catch { /* locations unavailable */ }
+
       for (const table of TABLE_LIST) {
+        if (table === "chokepoints") continue;
         try {
           const resp = await fetchEntities<any>(table, { limit: 500 });
-          const items = resp.items || [];
-          for (const item of items) {
+          for (const item of resp.items || []) {
             if (item.latitude != null && item.longitude != null) {
               all.push({
                 type: table,
@@ -71,9 +136,7 @@ const EnergyMap = () => {
               });
             }
           }
-        } catch {
-          // table may not be available
-        }
+        } catch { /* table may not be available */ }
       }
       if (!cancelled) {
         setAssets(all);
@@ -84,7 +147,91 @@ const EnergyMap = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const filteredAssets = assets.filter((a) => activeLayers[a.type]);
+  // init map once
+  useEffect(() => {
+    if (!mapContainer.current || mapRef.current) return;
+    const map = new maplibregl.Map({
+      container: mapContainer.current,
+      style: MAP_STYLE,
+      center: [65, 18],   // Arabian Sea — India's import corridors in frame
+      zoom: 3,
+      attributionControl: { compact: true },
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+
+    map.on("load", () => {
+      map.addSource("assets", { type: "geojson", data: toGeoJSON([]) });
+
+      map.addLayer({
+        id: "asset-glow",
+        type: "circle",
+        source: "assets",
+        paint: {
+          "circle-radius": ["+", ["interpolate", ["linear"], ["get", "importance"], 0, 4, 100, 11], 4],
+          "circle-color": colorMatchExpression(),
+          "circle-opacity": 0.18,
+        },
+      });
+      map.addLayer({
+        id: "asset-points",
+        type: "circle",
+        source: "assets",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 0, 3, 100, 8],
+          "circle-color": colorMatchExpression(),
+          "circle-opacity": 0.9,
+          "circle-stroke-width": ["case", ["==", ["get", "isChokepoint"], 1], 2, 0.5],
+          "circle-stroke-color": ["case", ["==", ["get", "isChokepoint"], 1], "#ffffff", "#0a1628"],
+        },
+      });
+      map.addLayer({
+        id: "asset-labels",
+        type: "symbol",
+        source: "assets",
+        minzoom: 4.5,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 10,
+          "text-offset": [0, 1.2],
+          "text-anchor": "top",
+        },
+        paint: {
+          "text-color": "#cbd5e1",
+          "text-halo-color": "#0a1628",
+          "text-halo-width": 1,
+        },
+      });
+
+      map.on("mouseenter", "asset-points", () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "asset-points", () => { map.getCanvas().style.cursor = ""; });
+      setMapReady(true);
+    });
+
+    mapRef.current = map;
+    return () => { map.remove(); mapRef.current = null; };
+  }, []);
+
+  const filteredAssets = useMemo(
+    () => assets.filter((a) => activeLayers[a.type]),
+    [assets, activeLayers],
+  );
+
+  // push data + click handler whenever the filtered set changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const source = map.getSource("assets") as maplibregl.GeoJSONSource | undefined;
+    if (source) source.setData(toGeoJSON(filteredAssets));
+
+    const onClick = (e: maplibregl.MapLayerMouseEvent) => {
+      const f = e.features?.[0];
+      if (f && typeof f.properties?.idx === "number") {
+        setSelectedAsset(filteredAssets[f.properties.idx] ?? null);
+      }
+    };
+    map.on("click", "asset-points", onClick);
+    return () => { map.off("click", "asset-points", onClick); };
+  }, [filteredAssets, mapReady]);
 
   const toggleLayer = (type: string) => {
     setActiveLayers((prev) => ({ ...prev, [type]: !prev[type] }));
@@ -102,7 +249,7 @@ const EnergyMap = () => {
             <div className="space-y-1.5">
               {TABLE_LIST.map((type) => {
                 const cfg = assetConfig[type];
-                const Icon = cfg?.icon || Map;
+                const Icon = cfg?.icon || MapIcon;
                 return (
                   <button
                     key={type}
@@ -135,41 +282,20 @@ const EnergyMap = () => {
 
         <div className="flex-1">
           <div className="relative overflow-hidden rounded-2xl border border-border bg-[#0a1628]">
-            {loading ? (
-              <div className="flex h-[600px] items-center justify-center text-sm text-muted-foreground">
+            <div ref={mapContainer} className="h-[600px] w-full" />
+
+            {loading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0a1628]/70 text-sm text-muted-foreground">
                 Loading energy assets...
               </div>
-            ) : (
-              <svg viewBox="0 0 1000 500" className="h-auto w-full" style={{ minHeight: "500px" }}>
-                <rect x="0" y="0" width="1000" height="500" fill="#0a1628" />
-                {Array.from({ length: 18 }).map((_, i) => (
-                  <line key={`h${i}`} x1="0" y1={i * 27.8} x2="1000" y2={i * 27.8} stroke="#1a2744" strokeWidth="0.5" />
-                ))}
-                {Array.from({ length: 36 }).map((_, i) => (
-                  <line key={`v${i}`} x1={i * 27.8} y1="0" x2={i * 27.8} y2="500" stroke="#1a2744" strokeWidth="0.5" />
-                ))}
-
-                {filteredAssets.map((asset, idx) => {
-                  const x = toLng(asset.lng);
-                  const y = toLat(asset.lat);
-                  const cfg = assetConfig[asset.type];
-                  const r = Math.max(3, Math.min(8, (asset.importance || 50) / 12));
-                  return (
-                    <g key={`${asset.type}-${idx}`} className="cursor-pointer" onClick={() => setSelectedAsset(asset)}>
-                      <circle cx={x} cy={y} r={r + 2} fill="none" stroke={cfg?.color || "#666"} strokeWidth="0.5" opacity="0.4" />
-                      <circle cx={x} cy={y} r={r} fill={cfg?.color || "#666"} opacity="0.8" className="hover:opacity-100" />
-                    </g>
-                  );
-                })}
-              </svg>
             )}
 
             {selectedAsset && (
-              <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-border bg-card p-4 shadow-lg lg:left-auto lg:right-4 lg:w-80">
+              <div className="absolute bottom-4 left-4 right-4 z-10 rounded-2xl border border-border bg-card p-4 shadow-lg lg:left-auto lg:right-4 lg:w-80">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     {(() => {
-                      const Icon = assetConfig[selectedAsset.type]?.icon || Map;
+                      const Icon = assetConfig[selectedAsset.type]?.icon || MapIcon;
                       return <Icon className="h-4 w-4 text-primary" />;
                     })()}
                     <p className="font-semibold">{selectedAsset.name}</p>
@@ -187,11 +313,13 @@ const EnergyMap = () => {
                     <span className="rounded-full border px-2 py-0.5 text-xs">Importance: {selectedAsset.importance}</span>
                   )}
                 </div>
-                <Button size="sm" variant="secondary" className="w-full" onClick={() => {
-                  navigate(`/energy/assets/${selectedAsset.type}/${selectedAsset.uuid}`);
-                }}>
-                  View Details
-                </Button>
+                {selectedAsset.type !== "chokepoints" && (
+                  <Button size="sm" variant="secondary" className="w-full" onClick={() => {
+                    navigate(`/energy/assets/${selectedAsset.type}/${selectedAsset.uuid}`);
+                  }}>
+                    View Details
+                  </Button>
+                )}
               </div>
             )}
           </div>

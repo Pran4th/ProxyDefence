@@ -18,9 +18,9 @@ launch_consumer() {
     echo "  PID $!"
 }
 
-launch_consumer "ml-consumer"        "services/ml-service"        "consumer.py"
-launch_consumer "embedding-consumer" "services/embedding-service" "consumer.py"
-launch_consumer "db-consumer"        "services/database-service"  "consumer.py"
+launch_consumer "ml-platform-consumer" "services/ml-platform"       "consumer/article_enrichment.py"
+launch_consumer "embedding-consumer"   "services/embedding-service" "consumer.py"
+launch_consumer "db-consumer"          "services/database-service"  "consumer.py"
 
 echo ""
 echo "Consumers running in background. Check /tmp/*.log for output."

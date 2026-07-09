@@ -21,10 +21,18 @@ END $$;
 DO $$ BEGIN
     CREATE TYPE ml.model_type AS ENUM (
         'logistic_regression', 'decision_tree', 'random_forest',
-        'xgboost', 'lightgbm', 'catboost'
+        'xgboost', 'lightgbm', 'catboost',
+        'ridge_regression', 'random_forest_regressor', 'xgboost_regressor',
+        'xgboost_ranker'
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Idempotent upgrades for databases created before the regression/ranking types existed
+ALTER TYPE ml.model_type ADD VALUE IF NOT EXISTS 'ridge_regression';
+ALTER TYPE ml.model_type ADD VALUE IF NOT EXISTS 'random_forest_regressor';
+ALTER TYPE ml.model_type ADD VALUE IF NOT EXISTS 'xgboost_regressor';
+ALTER TYPE ml.model_type ADD VALUE IF NOT EXISTS 'xgboost_ranker';
 
 DO $$ BEGIN
     CREATE TYPE ml.split_type AS ENUM ('train', 'validation', 'test');
@@ -96,6 +104,32 @@ CREATE TABLE IF NOT EXISTS ml.model_versions (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(name, version)
+);
+
+-- Model benchmark leaderboard (research/leaderboard/board.py::Leaderboard)
+CREATE TABLE IF NOT EXISTS ml.leaderboard (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID UNIQUE DEFAULT gen_random_uuid(),
+    model_name TEXT NOT NULL,
+    model_version INTEGER NOT NULL,
+    model_type TEXT NOT NULL,
+    experiment_name TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    primary_metric TEXT NOT NULL,
+    primary_score DOUBLE PRECISION NOT NULL,
+    secondary_metric TEXT,
+    secondary_score DOUBLE PRECISION,
+    training_time_seconds DOUBLE PRECISION,
+    inference_latency_ms DOUBLE PRECISION,
+    memory_mb DOUBLE PRECISION,
+    model_size_kb DOUBLE PRECISION,
+    dataset_name TEXT,
+    dataset_version INTEGER DEFAULT 1,
+    feature_version INTEGER DEFAULT 1,
+    params JSONB DEFAULT '{}',
+    tags TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(model_name, model_version, run_id)
 );
 
 -- Prediction audit log

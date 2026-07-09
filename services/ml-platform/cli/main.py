@@ -430,12 +430,13 @@ async def _handle_parse(args: argparse.Namespace) -> int:
     else:
         output_dir = await lake.get_processed_path(args.source, version)
     output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"{args.source}.csv"
 
     parse_config = ParseConfig(
         source=args.source,
         version=version,
         input_path=input_path,
-        output_path=output_dir,
+        output_path=output_file,
         schema=sd.expected_schema,
     )
 
@@ -817,7 +818,6 @@ async def _handle_gdelt(args: argparse.Namespace) -> int:
 
     elif gdelt_action == "parse":
         import zipfile
-        from pathlib import Path
 
         version = version or "latest"
         parser = GDELTParser()
@@ -1127,3 +1127,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def ml_cli() -> None:
     sys.exit(main())
+
+
+if __name__ == "__main__":
+    ml_cli()

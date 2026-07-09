@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { api } from "@/lib/api";
+import { api, fetchTopEvents } from "@/lib/api";
 
 const Briefings = () => {
   const [events, setEvents] = useState<any[]>([]);
@@ -15,12 +15,12 @@ const Briefings = () => {
     try {
       setLoading(true);
 
-      const [eventsResponse, entitiesResponse] = await Promise.all([
-        api.get("/events"),
+      const [eventsData, entitiesResponse] = await Promise.all([
+        fetchTopEvents(),
         api.get("/analytics/entities"),
       ]);
 
-      setEvents(eventsResponse.data || []);
+      setEvents(eventsData || []);
       setEntities(entitiesResponse.data || []);
     } catch (error) {
       console.error(error);

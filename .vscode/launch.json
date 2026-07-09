@@ -16,15 +16,15 @@
       "justMyCode": true
     },
     {
-      "name": "ML Service",
+      "name": "ML Platform Consumer",
       "type": "debugpy",
       "request": "launch",
-      "module": "uvicorn",
-      "args": ["app:app", "--host", "0.0.0.0", "--port", "8002", "--reload"],
-      "cwd": "${workspaceFolder}/services/ml-service",
+      "program": "${workspaceFolder}/services/ml-platform/consumer/article_enrichment.py",
+      "cwd": "${workspaceFolder}/services/ml-platform",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}",
-        "ENVIRONMENT": "development"
+        "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/services/ml-platform",
+        "ENVIRONMENT": "development",
+        "KAFKA_BOOTSTRAP_SERVERS": "127.0.0.1:9092"
       },
       "console": "integratedTerminal",
       "justMyCode": true
@@ -92,7 +92,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["backend.api_service.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
+      "args": ["backend.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
       "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONPATH": "${workspaceFolder}",

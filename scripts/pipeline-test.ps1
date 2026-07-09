@@ -134,15 +134,15 @@ except Exception as e:
 
 # ─── Stage: ml ───
 function Test-MlStage {
-    Write-Step "Pipeline Stage: ML (ml-service)"
-    $ok, $code, $secs, $body = Invoke-HealthCheck -Url "http://localhost:8002/"
+    Write-Step "Pipeline Stage: ML (ml-platform)"
+    $ok, $code, $secs, $body = Invoke-HealthCheck -Url "http://localhost:8007/health"
     Add-Duration "ml" $secs
     if ($ok) {
         $status = if ($body -and $body.status) { $body.status } else { "unknown" }
-        Write-Ok "ml-service health: $status ($($secs.ToString('F2'))s)"
+        Write-Ok "ml-platform health: $status ($($secs.ToString('F2'))s)"
         return $true
     }
-    Write-Fail "ml-service not reachable (${secs}s)"
+    Write-Fail "ml-platform not reachable (${secs}s)"
     return $false
 }
 

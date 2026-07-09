@@ -6,21 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from backend.api.alerts.router import router as alerts_router
 from backend.api.agents.router import router as agents_router
 from backend.api.analytics.router import router as analytics_router
 from backend.api.articles.router import router as articles_router
 from backend.api.auth.router import router as auth_router
-from backend.api.cases.router import router as cases_router
 from backend.api.copilot.router import router as copilot_router
-from backend.api.entities.router import router as entities_router
-from backend.api.events.router import router as events_router
 from backend.api.graph.router import router as graph_router
 from backend.api.health.router import router as health_router
-from backend.api.reports.router import router as reports_router
+from backend.api.investigations.router import router as investigations_router
+from backend.api.public.router import router as public_router
 from backend.api.search.router import router as search_router
 from backend.api.search.router import semantic_router
-from backend.api.watchlists.router import router as watchlists_router
 from backend.api.energy.router import router as energy_router
 from backend.api.energy.router import intel_router
 from backend.api.rag.router import router as rag_router
@@ -64,6 +60,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(public_router)
 
 protected_routers = (
     agents_router,
@@ -72,12 +69,7 @@ protected_routers = (
     search_router,
     semantic_router,
     graph_router,
-    entities_router,
-    events_router,
-    reports_router,
-    watchlists_router,
-    alerts_router,
-    cases_router,
+    investigations_router,
     copilot_router,
     energy_router,
     intel_router,

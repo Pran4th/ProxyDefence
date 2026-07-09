@@ -50,7 +50,6 @@ if (-not (Test-Path ".env")) {
 
 $services = @(
     @{Name="ingest-service";    Dir="services/ingest-service";    Req="requirements.txt"},
-    @{Name="ml-service";        Dir="services/ml-service";        Req="requirements.txt"},
     @{Name="embedding-service"; Dir="services/embedding-service"; Req="requirements.txt"},
     @{Name="database-service";  Dir="services/database-service";  Req="requirements.txt"},
     @{Name="energy-service";    Dir="services/energy-service";    Req="requirements.txt"},
@@ -108,11 +107,11 @@ foreach ($svc in $services) {
     }
 }
 
-# --- spaCy model for ml-service ---
-Write-Host "`n--- spaCy Model (ml-service) ---" -ForegroundColor Cyan
-$mlPip = Join-Path $repoRoot "services/ml-service/.venv/Scripts/pip.exe"
+# --- spaCy model for ml-platform ---
+Write-Host "`n--- spaCy Model (ml-platform) ---" -ForegroundColor Cyan
+$mlPip = Join-Path $repoRoot "services/ml-platform/.venv/Scripts/pip.exe"
 if (Test-Path $mlPip) {
-    $spacyCheck = & (Join-Path $repoRoot "services/ml-service/.venv/Scripts/python.exe") -c "import spacy; spacy.load('en_core_web_sm')" 2>$null
+    $spacyCheck = & (Join-Path $repoRoot "services/ml-platform/.venv/Scripts/python.exe") -c "import spacy; spacy.load('en_core_web_sm')" 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  Downloading en_core_web_sm..." -ForegroundColor Yellow
         & $mlPip install --quiet "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl" 2>$null

@@ -3,9 +3,9 @@ from abc import ABC, abstractmethod
 import joblib
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from xgboost import XGBClassifier, XGBRegressor, XGBRanker
 try:
     from lightgbm import LGBMClassifier
     _LGBM_AVAILABLE = True
@@ -121,6 +121,60 @@ if _LGBM_AVAILABLE:
             return "lightgbm"
 
 
+class RidgeRegressionWrapper(BaseModelWrapper):
+    def _create_model(self, **params):
+        params.pop("random_state", None)
+        defaults = {}
+        defaults.update(params)
+        return Ridge(**defaults)
+
+    @property
+    def model_type(self) -> str:
+        return "ridge_regression"
+
+
+class RandomForestRegressorWrapper(BaseModelWrapper):
+    def _create_model(self, **params):
+        defaults = {"random_state": 42, "n_jobs": -1}
+        defaults.update(params)
+        return RandomForestRegressor(**defaults)
+
+    @property
+    def model_type(self) -> str:
+        return "random_forest_regressor"
+
+
+class XGBoostRegressorWrapper(BaseModelWrapper):
+    def _create_model(self, **params):
+        defaults = {"random_state": 42, "n_jobs": -1, "verbosity": 0}
+        defaults.update(params)
+        return XGBRegressor(**defaults)
+
+    @property
+    def model_type(self) -> str:
+        return "xgboost_regressor"
+
+
+class XGBoostRankerWrapper(BaseModelWrapper):
+    """Learning-to-rank (pairwise). fit() accepts a `group`/`qid` kwarg via fit(X, y, qid=...)."""
+
+    def _create_model(self, **params):
+        defaults = {"random_state": 42, "n_jobs": -1, "verbosity": 0, "objective": "rank:pairwise"}
+        defaults.update(params)
+        return XGBRanker(**defaults)
+
+    def fit(self, X, y, qid=None):
+        if qid is not None:
+            self._model.fit(X, y, qid=qid)
+        else:
+            self._model.fit(X, y)
+        return self
+
+    @property
+    def model_type(self) -> str:
+        return "xgboost_ranker"
+
+
 MODEL_REGISTRY: dict[str, type[BaseModelWrapper]] = {
     "logistic_regression": LogisticRegressionWrapper,
     "decision_tree": DecisionTreeWrapper,
@@ -129,3 +183,13 @@ MODEL_REGISTRY: dict[str, type[BaseModelWrapper]] = {
 }
 if _LGBM_AVAILABLE:
     MODEL_REGISTRY["lightgbm"] = LightGBMWrapper  # type: ignore
+
+REGRESSION_MODEL_REGISTRY: dict[str, type[BaseModelWrapper]] = {
+    "ridge_regression": RidgeRegressionWrapper,
+    "random_forest_regressor": RandomForestRegressorWrapper,
+    "xgboost_regressor": XGBoostRegressorWrapper,
+}
+
+RANKING_MODEL_REGISTRY: dict[str, type[BaseModelWrapper]] = {
+    "xgboost_ranker": XGBoostRankerWrapper,
+}

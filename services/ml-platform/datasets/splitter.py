@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-
-from backend.shared.logging_config import get_logger
-
-logger = get_logger(__name__)
+from sklearn.model_selection import train_test_split
 
 
 class DatasetSplitter:
@@ -22,28 +18,24 @@ class DatasetSplitter:
             "random_seed": self._random_seed,
         }
 
-    def split(self, df: pd.DataFrame, target_column: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
-        rs = np.random.RandomState(self._random_seed)
-        indices = df.index.to_numpy()
-        n = len(indices)
-        shuffled = rs.permutation(indices)
+    def split(self, df: pd.DataFrame, target_column: str):
+        feature_cols = [c for c in df.columns if c != target_column]
+        X = df[feature_cols]
+        y = df[target_column] if target_column in df.columns else pd.Series(dtype=object)
 
-        n_test = int(n * self._test_size)
-        n_val = int(n * self._val_size)
+        X_rest, X_test, y_rest, y_test = train_test_split(
+            X, y, test_size=self._test_size, random_state=self._random_seed,
+        )
 
-        test_idx = shuffled[:n_test]
-        val_idx = shuffled[n_test:n_test + n_val]
-        train_idx = shuffled[n_test + n_val:]
+        rest_fraction = 1.0 - self._test_size
+        val_fraction_of_rest = min(self._val_size / rest_fraction, 1.0) if rest_fraction > 0 else 0.0
 
-        train_df = df.loc[train_idx].reset_index(drop=True)
-        val_df = df.loc[val_idx].reset_index(drop=True)
-        test_df = df.loc[test_idx].reset_index(drop=True)
-
-        X_train = train_df.drop(columns=[target_column])
-        y_train = train_df[target_column]
-        X_val = val_df.drop(columns=[target_column])
-        y_val = val_df[target_column]
-        X_test = test_df.drop(columns=[target_column])
-        y_test = test_df[target_column]
+        if val_fraction_of_rest > 0:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_rest, y_rest, test_size=val_fraction_of_rest, random_state=self._random_seed,
+            )
+        else:
+            X_train, y_train = X_rest, y_rest
+            X_val, y_val = X_rest.iloc[0:0], y_rest.iloc[0:0]
 
         return X_train, X_val, X_test, y_train, y_val, y_test

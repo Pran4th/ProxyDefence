@@ -52,7 +52,7 @@ Write-Host "==========================`n" -ForegroundColor $C
 
 # --- Infrastructure ---
 Write-Host "Infrastructure" -ForegroundColor $C
-Check-Port "PostgreSQL  " 5432
+Check-Port "PostgreSQL  " 5434
 Check-Port "Kafka       " 9092
 Check-Port "Elasticsearch" 9200
 Write-Host ""
@@ -61,7 +61,6 @@ Write-Host ""
 Write-Host "API Services" -ForegroundColor $C
 Write-Status "modular-api      " "http://localhost:8000/"
 Write-Status "ingest-service   " "http://localhost:8001/"
-Write-Status "ml-service       " "http://localhost:8002/"
 Write-Status "database-service " "http://localhost:8003/health"
 Write-Status "embedding-service" "http://localhost:8005/"
 Write-Status "energy-service   " "http://localhost:8006/"

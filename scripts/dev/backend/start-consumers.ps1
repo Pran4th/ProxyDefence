@@ -4,9 +4,9 @@ $repoRoot = Split-Path -Path (Split-Path -Path (Split-Path -Path $PSScriptRoot -
 . "$repoRoot\scripts\dev\common\load-env.ps1" -RepoRoot $repoRoot
 
 $consumers = @(
-    @{Name="ml-consumer";         Dir="services/ml-service";        File="consumer.py"},
-    @{Name="embedding-consumer";  Dir="services/embedding-service"; File="consumer.py"},
-    @{Name="db-consumer";         Dir="services/database-service";  File="consumer.py"}
+    @{Name="ml-platform-consumer"; Dir="services/ml-platform";       File="consumer/article_enrichment.py"},
+    @{Name="embedding-consumer";   Dir="services/embedding-service"; File="consumer.py"},
+    @{Name="db-consumer";          Dir="services/database-service";  File="consumer.py"}
 )
 
 foreach ($c in $consumers) {

@@ -99,9 +99,26 @@ class CommodityPriceParser(BaseParser):
         else:
             with open(input_path, "r", encoding=encoding) as f:
                 reader = csv.DictReader(f)
+                fieldnames = reader.fieldnames or []
+                fuel_cols = [
+                    c for c in fieldnames
+                    if c.startswith("fuel_") and not c.startswith(("o_fuel_", "h_fuel_", "l_fuel_", "c_fuel_"))
+                ]
+                is_wide_fuel_panel = "mkt_name" in fieldnames and bool(fuel_cols)
+
                 for row_idx, row in enumerate(reader):
                     if max_records is not None and records_parsed >= max_records:
                         break
+                    if is_wide_fuel_panel:
+                        try:
+                            recs = self._melt_fuel_panel_row(row, fuel_cols)
+                            canonical = await self.to_canonical(recs)
+                            canonical_records.extend(canonical)
+                            records_parsed += len(recs)
+                        except Exception as e:
+                            records_failed += 1
+                            errors.append({"row": row_idx, "error": str(e)})
+                        continue
                     try:
                         rec = {
                             "commodity": row.get("commodity", row.get("Commodity", row.get("name", ""))),
@@ -189,33 +206,64 @@ class CommodityPriceParser(BaseParser):
                 precision = "day"
 
             commodity = rec.get("commodity", "").strip().lower().replace(" ", "_")
+            entity_id = f"{commodity}_{rec.get('market', '')}_{rec.get('date', '')}"
             canonical.append({
                 "entity_type": "commodity_price",
-                "entity_id": f"{commodity}_{rec.get('date', '')}",
+                "entity_id": entity_id,
                 "entity_name": rec.get("commodity", ""),
                 "timestamp": rec.get("date", ""),
                 "timestamp_precision": precision,
-                "latitude": None,
-                "longitude": None,
+                "latitude": self._safe_float(rec.get("latitude")),
+                "longitude": self._safe_float(rec.get("longitude")),
                 "location_name": rec.get("market"),
-                "location_code": rec.get("market"),
+                "location_code": rec.get("country_code") or rec.get("market"),
                 "attributes": {
                     "commodity": rec.get("commodity"),
                     "price": self._safe_float(rec.get("price")),
                     "unit": rec.get("unit"),
                     "currency": rec.get("currency"),
                     "market": rec.get("market"),
+                    "country": rec.get("country"),
+                    "country_code": rec.get("country_code"),
+                    "inflation_pct": self._safe_float(rec.get("inflation_pct")),
+                    "data_trust_score": self._safe_float(rec.get("data_trust_score")),
                     "source_name": rec.get("source"),
                 },
                 "relationships": [
                     {"type": "traded_on", "target_id": rec.get("market")},
                 ],
                 "source": rec.get("source", "commodity"),
-                "source_record_id": f"{commodity}_{rec.get('date', '')}",
-                "confidence": None,
+                "source_record_id": entity_id,
+                "confidence": self._safe_float(rec.get("data_trust_score")),
                 "metadata": {"parser": "CommodityPriceParser", "version": "1.0"},
             })
         return canonical
+
+    def _melt_fuel_panel_row(self, row: dict, fuel_cols: list[str]) -> list[dict]:
+        """Melts one wide fuel-price-panel row (WFP-style: fuel_<type>, o_/h_/l_/c_/inflation_/trust_ prefixes)
+        into one canonical price record per fuel type present in that row."""
+        records: list[dict] = []
+        for col in fuel_cols:
+            fuel_type = col[len("fuel_"):]
+            price = row.get(f"c_{col}") or row.get(col)
+            if price is None or str(price).strip() == "":
+                continue
+            records.append({
+                "commodity": f"fuel_{fuel_type}",
+                "date": row.get("DATES", ""),
+                "price": price,
+                "unit": "per_liter_local_currency",
+                "currency": row.get("currency", ""),
+                "market": row.get("mkt_name", ""),
+                "source": "wfp_global_fuel_prices",
+                "latitude": row.get("lat"),
+                "longitude": row.get("lon"),
+                "country": row.get("country"),
+                "country_code": row.get("ISO3"),
+                "inflation_pct": row.get(f"inflation_{col}"),
+                "data_trust_score": row.get(f"trust_{col}"),
+            })
+        return records
 
     def _safe_float(self, value: Any) -> float | None:
         if value is None or (isinstance(value, str) and value.strip() == ""):

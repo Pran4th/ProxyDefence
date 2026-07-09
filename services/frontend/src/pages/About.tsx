@@ -1,13 +1,24 @@
+import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
-import { Shield, Target, Users, Zap, Globe, Lock } from "lucide-react";
+import Logo from "@/components/Logo";
+import { Target, Zap, Lock, Globe, BrainCircuit, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { fetchPublicPreview, type PublicPreview } from "@/lib/api";
 
 const About = () => {
+  const [preview, setPreview] = useState<PublicPreview | null>(null);
+
+  useEffect(() => {
+    fetchPublicPreview().then(setPreview).catch(() => undefined);
+  }, []);
+
+  const stats = preview?.stats;
+
   return (
     <div className="min-h-screen">
       <Navbar />
-      
+
       <div className="pt-24 pb-20">
         <div className="container mx-auto px-4">
           {/* Hero Section */}
@@ -16,8 +27,8 @@ const About = () => {
               Defending Digital Infrastructure
             </h1>
             <p className="text-xl text-muted-foreground">
-              ProxyDefence is the world's most advanced proxy threat intelligence platform,
-              powered by AI and trusted by enterprises globally.
+              ProxyDefence fuses live news ingestion, trained ML models, and multi-source
+              geopolitical data into one real-time energy and threat intelligence platform.
             </p>
           </div>
 
@@ -27,19 +38,19 @@ const About = () => {
               <div>
                 <h2 className="text-3xl font-bold mb-4">Our Mission</h2>
                 <p className="text-lg text-muted-foreground mb-6">
-                  We're building the future of cybersecurity through real-time threat intelligence,
-                  predictive analytics, and automated defense systems. Our platform protects
-                  critical infrastructure from sophisticated proxy-based attacks that traditional
-                  security solutions miss.
+                  We're building real-time geopolitical and energy-supply-chain intelligence by
+                  fusing streaming news with structured data — sanctions lists, vessel tracking,
+                  commodity prices, and conflict-event data — and scoring it all with trained
+                  machine learning models, not keyword heuristics.
                 </p>
                 <p className="text-lg text-muted-foreground">
-                  By combining cutting-edge machine learning with global threat data, we empower
-                  security teams to stay ahead of attackers and protect what matters most.
+                  Every number on this page reflects what's actually running in the platform
+                  right now, queried live from the same database the analyst workspace uses.
                 </p>
               </div>
               <div className="relative">
                 <div className="aspect-square rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 p-8 flex items-center justify-center">
-                  <Shield className="h-48 w-48 text-primary opacity-50" />
+                  <Logo className="h-40 w-40" />
                 </div>
               </div>
             </div>
@@ -53,24 +64,24 @@ const About = () => {
                 <Target className="h-10 w-10 text-primary mb-4" />
                 <h3 className="text-xl font-semibold mb-3">Precision</h3>
                 <p className="text-muted-foreground">
-                  We deliver accuracy at scale, minimizing false positives while catching
-                  sophisticated threats that others miss.
+                  Trained classifiers, not keyword matching — every threat score, topic label,
+                  and risk classification comes from a model with a measured validation metric.
                 </p>
               </div>
               <div className="p-8 rounded-lg border border-border bg-card shadow-elevation">
                 <Zap className="h-10 w-10 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-3">Speed</h3>
+                <h3 className="text-xl font-semibold mb-3">Freshness</h3>
                 <p className="text-muted-foreground">
-                  Millisecond response times ensure threats are neutralized before they
-                  can cause damage to your infrastructure.
+                  News ingestion runs hourly across two independent providers, so the risk
+                  picture reflects what's happening now, not last week.
                 </p>
               </div>
               <div className="p-8 rounded-lg border border-border bg-card shadow-elevation">
                 <Lock className="h-10 w-10 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-3">Trust</h3>
+                <h3 className="text-xl font-semibold mb-3">Honesty</h3>
                 <p className="text-muted-foreground">
-                  Enterprise-grade security and privacy protections keep your data safe
-                  while we protect your networks.
+                  When a data source has a real gap — a currency with no exchange-rate coverage,
+                  a region with thin sensor data — we show that gap instead of papering over it.
                 </p>
               </div>
             </div>
@@ -79,7 +90,7 @@ const About = () => {
           {/* Technology Section */}
           <section className="mb-20 bg-muted/20 rounded-2xl p-12">
             <h2 className="text-3xl font-bold mb-8 text-center">
-              Powered by Advanced Technology
+              Powered by Real Data, Not Demos
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
               <div className="flex gap-4">
@@ -87,22 +98,22 @@ const About = () => {
                   <Globe className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Global Threat Network</h3>
+                  <h3 className="font-semibold mb-2">Multi-Source Data Fusion</h3>
                   <p className="text-sm text-muted-foreground">
-                    Real-time data collection from 150+ countries and 10,000+ honeypots
-                    worldwide provides unmatched visibility.
+                    GDELT global events, EIA energy statistics, AIS vessel tracking, OFAC/EU/UN
+                    sanctions lists, and commodity prices — unified into one canonical schema.
                   </p>
                 </div>
               </div>
               <div className="flex gap-4">
                 <div className="h-12 w-12 rounded-lg bg-gradient-accent flex items-center justify-center flex-shrink-0">
-                  <Target className="h-6 w-6 text-white" />
+                  <BrainCircuit className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">AI-Powered Detection</h3>
+                  <h3 className="font-semibold mb-2">Trained ML Models</h3>
                   <p className="text-sm text-muted-foreground">
-                    Machine learning models trained on billions of data points identify
-                    threats with 99.7% accuracy.
+                    An XGBoost disruption-risk classifier, a topic classifier beating naive
+                    baselines by double digits, and dedicated price and procurement forecasters.
                   </p>
                 </div>
               </div>
@@ -111,10 +122,10 @@ const About = () => {
                   <Zap className="h-6 w-6 text-success-foreground" />
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Automated Response</h3>
+                  <h3 className="font-semibold mb-2">Live Simulation Engine</h3>
                   <p className="text-sm text-muted-foreground">
-                    Instant threat mitigation through automated countermeasures and
-                    adaptive defense strategies.
+                    A digital-twin network model lets analysts run what-if scenarios — chokepoint
+                    closures, refinery outages — and see the projected supply gap.
                   </p>
                 </div>
               </div>
@@ -123,10 +134,10 @@ const About = () => {
                   <Users className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Expert Team</h3>
+                  <h3 className="font-semibold mb-2">Built for Analysts</h3>
                   <p className="text-sm text-muted-foreground">
-                    Security researchers and engineers with decades of combined experience
-                    in threat intelligence.
+                    Cases, generated intelligence briefs, watchable search, and a graph explorer
+                    designed around how threat analysts actually investigate a story.
                   </p>
                 </div>
               </div>
@@ -137,20 +148,28 @@ const About = () => {
           <section className="mb-20">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               <div className="text-center">
-                <p className="text-4xl font-bold text-primary mb-2">1.4K+</p>
-                <p className="text-sm text-muted-foreground">Protected Networks</p>
+                <p className="text-4xl font-bold text-primary mb-2">
+                  {stats ? stats.trained_models : "—"}
+                </p>
+                <p className="text-sm text-muted-foreground">Trained ML Models</p>
               </div>
               <div className="text-center">
-                <p className="text-4xl font-bold text-primary mb-2">99.7%</p>
-                <p className="text-sm text-muted-foreground">Detection Accuracy</p>
+                <p className="text-4xl font-bold text-primary mb-2">
+                  {stats ? stats.datasets : "—"}
+                </p>
+                <p className="text-sm text-muted-foreground">Live Data Sources</p>
               </div>
               <div className="text-center">
-                <p className="text-4xl font-bold text-primary mb-2">0.3s</p>
-                <p className="text-sm text-muted-foreground">Avg Response Time</p>
+                <p className="text-4xl font-bold text-primary mb-2">
+                  {stats ? `${Math.round(stats.avg_confidence * 100)}%` : "—"}
+                </p>
+                <p className="text-sm text-muted-foreground">Avg. ML Confidence</p>
               </div>
               <div className="text-center">
-                <p className="text-4xl font-bold text-primary mb-2">24/7</p>
-                <p className="text-sm text-muted-foreground">Global Monitoring</p>
+                <p className="text-4xl font-bold text-primary mb-2">
+                  {stats ? stats.total_articles : "—"}
+                </p>
+                <p className="text-sm text-muted-foreground">Articles Analyzed</p>
               </div>
             </div>
           </section>
@@ -159,15 +178,15 @@ const About = () => {
           <section>
             <div className="max-w-3xl mx-auto text-center bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl p-12 border border-primary/20">
               <h2 className="text-3xl font-bold mb-4">
-                Join the Defense Revolution
+                See the Full Picture
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
-                Experience enterprise-grade protection with our 14-day free trial.
-                No credit card required.
+                Create a free analyst account to explore the live threat feed, entity graph,
+                risk dashboard, and simulation engine.
               </p>
               <Link to="/auth">
                 <Button variant="hero" size="lg">
-                  Start Your Free Trial
+                  Create Free Account
                 </Button>
               </Link>
             </div>

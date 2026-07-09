@@ -135,7 +135,6 @@ Write-Step "Microservices"
 $serviceResults = @{}
 $serviceResults["modular-api"]      = Check-HttpService -Name "modular-api"       -Url "http://localhost:8000/"       -Port 8000
 $serviceResults["ingest-service"]   = Check-HttpService -Name "ingest-service"    -Url "http://localhost:8001/"       -Port 8001
-$serviceResults["ml-service"]       = Check-HttpService -Name "ml-service"        -Url "http://localhost:8002/"       -Port 8002
 $serviceResults["database-service"] = Check-HttpService -Name "database-service"  -Url "http://localhost:8003/health"  -Port 8003
 $serviceResults["embedding-service"]= Check-HttpService -Name "embedding-service" -Url "http://localhost:8005/"       -Port 8005
 $serviceResults["energy-service"]   = Check-HttpService -Name "energy-service"    -Url "http://localhost:8006/"       -Port 8006

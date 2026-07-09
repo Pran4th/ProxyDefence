@@ -1,17 +1,26 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight, Clock } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  ArrowRight,
+  Clock,
+  Newspaper,
+  BrainCircuit,
+  Share2,
+  Radar,
+  Database,
+  ShieldAlert,
+} from "lucide-react";
 
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { fetchAnalyticsSummary, fetchArticles, type AnalyticsSummary, type Article } from "@/lib/api";
+import { fetchPublicPreview, type PublicPreview, type PublicPreviewArticle } from "@/lib/api";
 import heroBg from "@/assets/hero-bg.png";
 
 type Severity = "low" | "medium" | "high" | "critical";
 type Tone = "primary" | "success" | "warning" | "destructive";
 
-const getSeverity = (article: Article): Severity => {
+const getSeverity = (article: PublicPreviewArticle): Severity => {
   if (article.risk_level === "critical") return "critical";
   if (article.risk_level === "high") return "high";
   if (article.sentiment === "negative") return "high";
@@ -118,24 +127,68 @@ const SignalStrip = ({ metrics }: { metrics: SignalMetric[] }) => {
   );
 };
 
+interface Capability {
+  icon: typeof Newspaper;
+  title: string;
+  description: string;
+}
+
+const CAPABILITIES: Capability[] = [
+  {
+    icon: Newspaper,
+    title: "Live news fusion",
+    description: "Continuous ingestion from GNews and NewsData.io streamed straight into the analysis pipeline.",
+  },
+  {
+    icon: BrainCircuit,
+    title: "Trained ML scoring",
+    description: "XGBoost topic and disruption-risk classifiers trained on real GDELT and sanctions data score every article.",
+  },
+  {
+    icon: Share2,
+    title: "Entity & relationship graphing",
+    description: "Named-entity extraction links actors, organizations, and locations into an explorable intelligence graph.",
+  },
+  {
+    icon: Radar,
+    title: "Digital twin simulations",
+    description: "Stress-test supply-chain scenarios — chokepoint closures, refinery outages — against a live network model.",
+  },
+  {
+    icon: Database,
+    title: "Multi-source data fusion",
+    description: "GDELT, EIA, AIS vessel tracking, OFAC/EU/UN sanctions lists, and commodity prices, unified in one platform.",
+  },
+  {
+    icon: ShieldAlert,
+    title: "Risk intelligence",
+    description: "Chokepoint and infrastructure risk scores blend rule-based signals with calibrated model output.",
+  },
+];
+
 const Landing = () => {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [preview, setPreview] = useState<PublicPreview | null>(null);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
-    Promise.all([fetchArticles({ limit: 3 }), fetchAnalyticsSummary()])
-      .then(([articleData, summaryData]) => {
-        setArticles(articleData);
-        setSummary(summaryData);
-      })
+    fetchPublicPreview()
+      .then(setPreview)
       .finally(() => setLoading(false));
   }, []);
 
-  const totalArticles = summary?.total_articles ?? 0;
-  const highRisk = summary?.high_risk_articles ?? 0;
-  const avgThreat = summary?.avg_threat_score ?? 0;
-  const avgConfidencePct = (summary?.avg_confidence ?? 0) * 100;
+  useEffect(() => {
+    if (location.hash) {
+      const el = document.querySelector(location.hash);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [location.hash, loading]);
+
+  const stats = preview?.stats;
+  const totalArticles = stats?.total_articles ?? 0;
+  const highRisk = stats?.high_risk_articles ?? 0;
+  const avgThreat = stats?.avg_threat_score ?? 0;
+  const avgConfidencePct = (stats?.avg_confidence ?? 0) * 100;
   const highRiskRatio = totalArticles > 0 ? (highRisk / totalArticles) * 100 : 0;
 
   const metrics: SignalMetric[] = [
@@ -215,6 +268,38 @@ const Landing = () => {
               </span>
             </div>
             <SignalStrip metrics={metrics} />
+            {!loading && stats && (
+              <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground">
+                Backed by <span className="font-semibold text-foreground">{stats.trained_models}</span> trained ML models across{" "}
+                <span className="font-semibold text-foreground">{stats.datasets}</span> live data sources.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section id="capabilities" className="scroll-mt-20 pb-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="mb-10 text-center">
+            <p className="font-mono text-xs uppercase tracking-[0.35em] text-primary">Platform</p>
+            <h2 className="mt-2 font-display text-3xl font-semibold">What's actually running under the hood</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
+              No vaporware — every capability below is a real, trained model or live data pipeline you can inspect after signing in.
+            </p>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {CAPABILITIES.map((cap) => (
+              <div
+                key={cap.title}
+                className="rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40"
+              >
+                <div className="mb-4 grid h-11 w-11 place-items-center rounded-lg bg-primary/10">
+                  <cap.icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="mb-2 font-display text-lg font-semibold">{cap.title}</h3>
+                <p className="text-sm text-muted-foreground">{cap.description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -233,11 +318,11 @@ const Landing = () => {
           </div>
 
           <div className="grid gap-5 lg:grid-cols-3">
-            {articles.map((article) => {
+            {(preview?.articles ?? []).map((article, i) => {
               const severity = getSeverity(article);
               return (
                 <div
-                  key={article.id}
+                  key={i}
                   className="group flex overflow-hidden rounded-md border border-border bg-card"
                 >
                   <span className={cn("w-1 shrink-0", severityTab[severity])} aria-hidden="true" />
@@ -250,11 +335,11 @@ const Landing = () => {
                         {article.source} &middot; {article.topic || "general"}
                       </span>
                     </div>
-                    <h3 className="mb-2 font-display text-lg font-semibold leading-snug transition-colors group-hover:text-primary">
+                    <h3 className="mb-2 font-display text-lg font-semibold leading-snug">
                       {article.title}
                     </h3>
                     <p className="mb-4 line-clamp-3 text-sm text-muted-foreground">
-                      {article.summary || article.content}
+                      {article.summary}
                     </p>
                     <div className="flex items-center gap-2 font-mono text-xs tabular-nums text-muted-foreground">
                       <Clock className="h-3 w-3" />
@@ -264,6 +349,14 @@ const Landing = () => {
                 </div>
               );
             })}
+          </div>
+          <div className="mt-8 text-center">
+            <Link to="/auth">
+              <Button variant="outline">
+                Sign in for full analysis, entities, and threat breakdowns
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

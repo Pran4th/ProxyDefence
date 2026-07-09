@@ -10,10 +10,17 @@ semantic_router = APIRouter(prefix="/semantic-search", tags=["Semantic Search"])
 
 
 @router.get("/")
-async def search_articles(request: Request, q: str = Query(..., min_length=2)):
+async def search_articles(
+    request: Request,
+    q: str = Query(..., min_length=2),
+    topic: str | None = Query(None),
+    risk_level: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
     repo = SearchRepository(request.app.state.es_client)
     service = SearchService(repo)
-    return await service.search_articles(q)
+    return await service.search_articles(q, topic, risk_level, limit, offset)
 
 
 @semantic_router.get("")

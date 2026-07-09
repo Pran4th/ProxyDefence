@@ -1,7 +1,5 @@
 """Unit tests for backend.shared.observability.metrics."""
 
-from prometheus_client import REGISTRY
-
 
 class TestMetricDefinitions:
     def test_metrics_are_registered(self):
@@ -14,14 +12,14 @@ class TestMetricDefinitions:
             startup_duration_seconds,
         )
 
-        sample = REGISTRY.sample_from_metric(db_query_latency)
-        assert sample is not None
+        sample = list(db_query_latency.collect())
+        assert sample
 
     def test_db_query_latency_labels(self):
         from backend.shared.observability.metrics import db_query_latency
         db_query_latency.labels(service="test", operation="select").observe(0.05)
-        sample = REGISTRY.sample_from_metric(db_query_latency)
-        assert sample is not None
+        sample = list(db_query_latency.collect())
+        assert sample
 
     def test_embedding_latency_defined(self):
         from backend.shared.observability.metrics import embedding_latency

@@ -12,6 +12,7 @@ from backend.shared.request_middleware import RequestTrackingMiddleware
 
 from producer import check_kafka_connection, flush_producer
 from services.news_fetcher import fetch_real_news
+from services.newsdata_fetcher import fetch_newsdata_news
 
 setup_structlog("ingest-service")
 logger = get_logger(__name__)
@@ -31,7 +32,12 @@ async def lifespan(app: FastAPI):
         fetch_real_news()
     except Exception as e:
         logger.error("initial_fetch_failed", error=str(e))
+    try:
+        fetch_newsdata_news()
+    except Exception as e:
+        logger.error("initial_newsdata_fetch_failed", error=str(e))
     scheduler.add_job(fetch_real_news, "interval", hours=1, id="fetch_news_job")
+    scheduler.add_job(fetch_newsdata_news, "interval", hours=1, id="fetch_newsdata_job")
     scheduler.start()
 
     timer.phase("ready")
@@ -91,3 +97,8 @@ async def status():
 @app.get("/fetch-real-news")
 async def trigger_fetch_news():
     return fetch_real_news()
+
+
+@app.get("/fetch-newsdata-news")
+async def trigger_fetch_newsdata_news():
+    return fetch_newsdata_news()

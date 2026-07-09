@@ -223,6 +223,20 @@ class AnalyticsRepository:
             for row in rows
         ]
 
+    async def get_top_events(self, limit: int = 20) -> list[dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, title, summary, topic, risk_score, risk_level, confidence,
+                       article_count, last_seen, updated_at
+                FROM events
+                ORDER BY risk_score DESC NULLS LAST, last_seen DESC NULLS LAST, updated_at DESC
+                LIMIT $1
+                """,
+                limit,
+            )
+        return [record_to_dict(row) for row in rows]
+
     async def get_topic_breakdown(self) -> list[dict[str, Any]]:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(

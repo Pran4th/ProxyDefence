@@ -10,6 +10,7 @@ Usage:
 
 import asyncio
 import json
+import os
 import sys
 import time
 import uuid
@@ -19,8 +20,12 @@ from typing import Any
 import httpx
 import asyncpg
 
-API_BASE = "http://localhost:8006"
-DSN = "postgresql://admin:change-me@localhost:5432/defenseintel"
+API_BASE = os.getenv("ENERGY_SERVICE_URL", "http://localhost:8006")
+DSN = (
+    f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
+    f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}"
+    f"/{os.getenv('POSTGRES_DB', 'defenseintel')}"
+)
 
 PASS = 0
 FAIL = 0

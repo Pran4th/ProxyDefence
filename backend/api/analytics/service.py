@@ -25,5 +25,8 @@ class AnalyticsService:
     async def get_top_entities(self) -> list[dict[str, Any]]:
         return await self.repository.get_top_entities()
 
+    async def get_top_events(self, limit: int = 20) -> list[dict[str, Any]]:
+        return await self.repository.get_top_events(limit)
+
     async def get_topic_breakdown(self) -> list[dict[str, Any]]:
         return await self.repository.get_topic_breakdown()

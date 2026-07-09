@@ -100,7 +100,7 @@ def main():
     # 6. Virtual environments
     print("\n6. Virtual Environments")
     services = [
-        "ingest-service", "ml-service", "embedding-service",
+        "ingest-service", "embedding-service",
         "database-service", "energy-service", "ml-platform", "modular-api",
     ]
     for svc in services:
