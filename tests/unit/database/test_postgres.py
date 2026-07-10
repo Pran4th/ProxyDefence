@@ -13,11 +13,12 @@ class TestBuildDSN:
         monkeypatch.setenv("JWT_SECRET_KEY", "test_jwt")
 
         import importlib
-        from backend.shared.database.postgres import build_dsn
         from backend.shared import settings
         importlib.reload(settings)
+        from backend.shared.database import postgres
+        importlib.reload(postgres)
 
-        dsn = build_dsn()
+        dsn = postgres.build_dsn()
         assert dsn.startswith("postgresql://")
         assert "test_user" in dsn
         assert "test_pass" in dsn
@@ -52,9 +53,10 @@ class TestBuildDSN:
         import importlib
         from backend.shared import settings
         importlib.reload(settings)
+        from backend.shared.database import postgres
+        importlib.reload(postgres)
 
-        from backend.shared.database.postgres import build_dsn
-        dsn = build_dsn(host="override-host")
+        dsn = postgres.build_dsn(host="override-host")
         assert "override-host" in dsn
         assert "base_user" in dsn
         assert "base_pass" in dsn
@@ -78,7 +80,11 @@ class TestCheckHealth:
         mock_conn.fetchval.assert_called_once_with("SELECT 1")
 
     def test_psycopg2_connection(self):
-        mock_conn = MagicMock()
+        # check_health() branches on hasattr(pool, "acquire") to tell an asyncpg
+        # pool from a psycopg2 connection -- MagicMock auto-vivifies any
+        # attribute access, so `acquire` must be explicitly removed to make
+        # this mock look like a real psycopg2 connection (which has none).
+        mock_conn = MagicMock(spec=["cursor"])
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
 

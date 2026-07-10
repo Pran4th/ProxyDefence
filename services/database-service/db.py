@@ -16,7 +16,7 @@ from backend.shared.elastic import es_url
 from backend.shared.logging_config import get_logger
 
 from config import (
-    POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD,
+    POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD,
     ELASTICSEARCH_HOST, ELASTICSEARCH_USER, ELASTICSEARCH_PASSWORD,
 )
 
@@ -32,6 +32,7 @@ def create_pool(min_size: int = 5, max_size: int = 20) -> None:
             min_size,
             max_size,
             host=POSTGRES_HOST,
+            port=POSTGRES_PORT,
             database=POSTGRES_DB,
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD,

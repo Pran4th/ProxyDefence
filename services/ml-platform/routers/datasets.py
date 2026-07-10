@@ -78,9 +78,14 @@ async def get_dataset(uuid: str, pool: asyncpg.Pool = Depends(get_pool)) -> dict
     return dict(row)
 
 
+_VALID_SPLITS = {"train", "val", "test"}
+
+
 @router.get("/{uuid}/download")
 async def download_dataset(uuid: str, split: str = Query("train"),
                            pool: asyncpg.Pool = Depends(get_pool)):
+    if split not in _VALID_SPLITS:
+        raise HTTPException(status_code=422, detail=f"Invalid split '{split}'. Must be one of: {sorted(_VALID_SPLITS)}")
     row = await pool.fetchrow("SELECT path, name, version FROM ml.datasets WHERE uuid = $1", uuid)
     if not row:
         raise HTTPException(status_code=404, detail="Dataset not found")

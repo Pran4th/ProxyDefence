@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 
 class TestJsonSerializer:
     def test_serializes_dict_to_utf8_bytes(self):

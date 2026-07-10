@@ -5,14 +5,13 @@ from ..base_check import BaseCheck, CheckResult
 from ..config import ValidationConfig
 
 CATEGORY = "services"
-DESCRIPTION = "Health checks for all 7 backend services"
+DESCRIPTION = "Health checks for all 6 backend services"
 
 
 def get_checks(config: ValidationConfig):
     return [
         ModularApiHealth(config),
         IngestServiceHealth(config),
-        MlServiceHealth(config),
         DatabaseServiceHealth(config),
         EmbeddingServiceHealth(config),
         EnergyServiceHealth(config),
@@ -88,12 +87,6 @@ class IngestServiceHealth(_ServiceCheck):
     name = "Ingest Service (8001)"
     description = "Ingest service health, liveness, version"
     url_key = "ingest_url"
-
-
-class MlServiceHealth(_ServiceCheck):
-    name = "ML Service (8002)"
-    description = "ML service health, liveness, version"
-    url_key = "ml_url"
 
 
 class DatabaseServiceHealth(_ServiceCheck):

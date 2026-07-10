@@ -18,15 +18,17 @@ Jupyter/Notebooks      VS Code                  Docker Compose
 
 ```
 GNews API → ingest-service → Kafka (raw_articles)
-                          → ml-service → Kafka (processed_articles)
+                          → ml-platform consumer → Kafka (processed_articles)
                                          → database-service → PostgreSQL + Elasticsearch
                                          → modular-api → Frontend
 
 Energy Service (port 8006) → PostgreSQL (energy schema)
-                          → Standalone catalog; consumed by future services
+                          → Standalone catalog; risk_engine blends ML scores from ml-platform
 
 ML Platform (port 8007) → PostgreSQL (ml schema)
                        → Consumes Energy Service data; serves prediction API
+                       → Kafka consumer (consumer/article_enrichment.py) for article
+                          enrichment — replaces the retired ml-service/ml-consumer pair
 ```
 
 ## Development Architecture
@@ -35,18 +37,17 @@ ML Platform (port 8007) → PostgreSQL (ml schema)
 VS Code
     │
     ├── ingest-service ── .venv ── uvicorn :8001
-    ├── ml-service ────── .venv ── uvicorn :8002
     ├── embedding-service─ .venv ── uvicorn :8005
     ├── database-service ─ .venv ── uvicorn :8003
     ├── energy-service ─── .venv ── uvicorn :8006
-    ├── ml-platform ────── .venv ── uvicorn :8007
+    ├── ml-platform ────── .venv ── uvicorn :8007 (also runs the article-enrichment consumer)
     ├── modular-api ────── .venv ── uvicorn :8000
     └── frontend ───────── node ── vite :8080
                 │
                 ▼
         Docker Infrastructure
             │
-            ├── PostgreSQL :5432
+            ├── PostgreSQL :5434 (mapped from container's 5432 — see 06_ENVIRONMENT_VARIABLES.md)
             ├── Kafka      :9092
             └── Elasticsearch :9200
 ```
@@ -67,7 +68,7 @@ docker-compose.full.yml
 | Service | Depends On |
 |---------|-----------|
 | ingest-service | Kafka |
-| ml-service | Kafka |
+| ml-platform | Kafka, PostgreSQL, energy-service |
 | embedding-service | PostgreSQL, Kafka |
 | database-service | Kafka, PostgreSQL, Elasticsearch |
 | modular-api | PostgreSQL, Elasticsearch |

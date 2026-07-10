@@ -77,6 +77,11 @@ app.add_middleware(RequestTrackingMiddleware)
 Instrumentator().instrument(app).expose(app)
 
 app.include_router(features.router)
+# dataset_catalog ("/datasets/catalog") must be registered before datasets
+# ("/datasets/{uuid}") -- Starlette matches routes in registration order, and
+# a single-segment {uuid} path param would otherwise swallow the literal
+# "/datasets/catalog" request before it ever reaches the catalog router.
+app.include_router(dataset_catalog.router)
 app.include_router(datasets.router)
 app.include_router(models.router)
 app.include_router(inference.router)
@@ -84,7 +89,6 @@ app.include_router(monitoring.router)
 app.include_router(deployment.router)
 app.include_router(features_serve.router)
 app.include_router(governance.router)
-app.include_router(dataset_catalog.router)
 app.include_router(dataset_validation.router)
 app.include_router(dataset_profiling.router)
 app.include_router(dataset_lineage.router)

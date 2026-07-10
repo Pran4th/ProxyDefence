@@ -24,7 +24,7 @@ These fail fast — services crash on startup if missing:
 |----------|---------|---------|
 | `POSTGRES_HOST` | postgres | PostgreSQL hostname |
 | `POSTGRES_DB` | defenseintel | PostgreSQL database name |
-| `POSTGRES_PORT` | 5432 | PostgreSQL port |
+| `POSTGRES_PORT` | 5432 (code default; `.env` sets **5434** — docker-compose.yml maps the container's 5432 to host 5434, see 01_LOCAL_SETUP.md) | PostgreSQL port |
 | `ELASTICSEARCH_HOST` | elasticsearch | Elasticsearch hostname |
 | `ELASTICSEARCH_USER` | elastic | Elasticsearch username |
 | `JWT_ALGORITHM` | HS256 | JWT signing algorithm |

@@ -41,7 +41,7 @@ Research (research/) → Jupyter notebooks → Exported models → ML Platform
 | Energy Service | 8006 |
 | ML Platform | 8007 |
 | Kafka | 9092 |
-| PostgreSQL | 5432 |
+| PostgreSQL | 5434 (not 5432 — see Configuration Notes) |
 | Elasticsearch | 9200 |
 
 ### Microservices
@@ -194,7 +194,7 @@ This project uses a "Multi-Model" approach. While Claude handles code generation
 
 * **Codebase Reviews:** Use the Gemini CLI to analyze all services (`/services/**`) simultaneously when checking for architectural drift or Kafka schema consistency.
 * **Log Analysis:** If a data pipeline error occurs, pipe the output of `docker-compose logs` to Gemini for root-cause analysis across multiple containers.
-* **ML/NLP Strategy:** Delegate complex prompt engineering or NLP model selection logic (for `ml-service`) to Gemini, as it can reference a larger corpus of documentation.
+* **ML/NLP Strategy:** Delegate complex prompt engineering or NLP model selection logic (for `ml-platform`'s article-enrichment consumer) to Gemini, as it can reference a larger corpus of documentation.
 
 **Integration Commands:**
 
@@ -288,6 +288,48 @@ jupyter notebook
 ```bash
 curl http://localhost:8001/fetch-real-news
 ```
+
+## Testing & Validation
+
+**pytest suites** (all passing — 132 in `services/modular-api`'s scope, 1033 in `services/ml-platform`'s):
+
+```powershell
+# Unit + integration (modular-api's venv; needs the full stack up for --run-integration)
+$env:PYTHONPATH = "C:\path\to\repo"
+services/modular-api/.venv/Scripts/python.exe -m pytest tests/unit tests/integration -q --run-integration
+
+# ml-platform's own suite (separate venv — has numpy/pandas/xgboost/confluent-kafka)
+$env:PYTHONPATH = "C:\path\to\repo;C:\path\to\repo\services\ml-platform"
+services/ml-platform/.venv/Scripts/python.exe -m pytest services/ml-platform -q
+```
+
+`tests/integration` is skipped by default (`use --run-integration to include`) since it needs
+live PG/ES/Kafka. Most integration tests use a mocked `pg_pool`/`es_client` (`async_client`
+fixture in `tests/conftest.py`); `test_auth_api.py` uses a real DB connection instead
+(`live_client` fixture) because register/login genuinely need INSERT...RETURNING /
+uniqueness-constraint round trips a generic mock can't simulate. If you add tests that
+`importlib.reload()` `backend.shared.settings`/`config` under monkeypatched env vars, know
+that module objects are process-wide singletons — the `_restore_shared_modules_after_reload`
+autouse fixture reloads them back to real values after each test so pollution doesn't leak
+into tests that run afterward in the same session; extend its module list if you reload
+something new.
+
+**End-to-end validation framework** (`validation/`, standalone — not pytest):
+
+```powershell
+$env:PYTHONPATH = "C:\path\to\repo"
+services/modular-api/.venv/Scripts/python.exe -m validation.runner            # everything
+services/modular-api/.venv/Scripts/python.exe -m validation.runner --list     # categories
+services/modular-api/.venv/Scripts/python.exe -m validation.runner -c services  # one category
+```
+
+Hits every live service over real HTTP/DB/ES/Kafka (10 categories: infrastructure, services,
+data_pipeline, datasets, feature_store, model_registry, inference, ai_layer, gdelt, frontend)
+and writes `validation_report.{json,html}`. Registers/logs in as a dedicated
+`validation-suite@proxydefence-test.io` account (`validation/auth.py`) to get a Bearer token
+for protected routes — needs the full stack running first. The `ai_layer` category exercises
+the real LLM (Groq) end-to-end, so heavy repeated runs can trip Groq's free-tier rate limit;
+that surfaces as a clean `503 LLM_RATE_LIMITED` response now, not a crash.
 
 ## Configuration Notes
 

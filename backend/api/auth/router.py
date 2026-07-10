@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from backend.api.auth.schema import RegisterRequest, LoginRequest
 from backend.api.auth.service import AuthService
@@ -23,5 +23,12 @@ async def login(payload: LoginRequest, request: Request):
 
 
 @router.get("/me")
-async def me(current_user: dict = Depends(get_current_user)):
-    return current_user
+async def me(request: Request, current_user: dict = Depends(get_current_user)):
+    async with request.app.state.pg_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email, username, role, created_at FROM users WHERE id = $1",
+            current_user["id"],
+        )
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return dict(user)

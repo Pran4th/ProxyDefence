@@ -52,12 +52,12 @@ class TestCreateAccessToken:
         import importlib
         from backend.shared import settings
         importlib.reload(settings)
+        from backend.api_service import security
+        importlib.reload(security)
 
         from jose import jwt
-        from backend.shared.settings import settings as s
-        from backend.api_service.security import create_access_token
 
-        token = create_access_token("42", {"role": "analyst"})
-        payload = jwt.decode(token, s.JWT_SECRET_KEY, algorithms=[s.JWT_ALGORITHM])
+        token = security.create_access_token("42", {"role": "analyst"})
+        payload = jwt.decode(token, settings.settings.JWT_SECRET_KEY, algorithms=[settings.settings.JWT_ALGORITHM])
         assert payload["sub"] == "42"
         assert payload["role"] == "analyst"

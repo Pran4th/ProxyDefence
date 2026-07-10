@@ -5,9 +5,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.api.agents.registry import agent_registry
 from backend.api.agents.specialist.interfaces import specialist_agent_registry
 from backend.api.agents.supervisor import SupervisorAgent
+from backend.api.common.errors import error_response
+from backend.shared.llm.exceptions import LLMRateLimitError, LLMError
 from backend.shared.llm.schemas import AgentResponse
 from backend.shared.orchestration.planner import Planner
 
@@ -34,7 +35,16 @@ async def agent_query(request: AgentQueryRequest) -> Any:
     supervisor = SupervisorAgent()
     if request.conversation_id:
         supervisor.set_conversation(request.conversation_id)
-    response = await supervisor.run(request.query)
+    try:
+        response = await supervisor.run(request.query)
+    except LLMRateLimitError:
+        raise error_response(
+            code="LLM_RATE_LIMITED",
+            message="The LLM provider's rate limit was exceeded. Try again shortly.",
+            status_code=503,
+        )
+    except LLMError as e:
+        raise error_response(code="LLM_ERROR", message=str(e), status_code=502)
     return AgentQueryResponse(
         content=response.answer,
         citations=[c.model_dump() for c in response.citations] if response.citations else None,
@@ -55,7 +65,7 @@ async def plan_query(request: AgentQueryRequest) -> Any:
 
 @router.get("/list")
 async def list_agents() -> list[dict]:
-    return agent_registry.list_agents()
+    return specialist_agent_registry.list_agents()
 
 
 @router.get("/specialist-agents")

@@ -68,7 +68,24 @@ Rules:
 - SPRAgent: strategic petroleum reserve analysis
 - ProcurementAgent: procurement optimization, supplier analysis
 
-Output ONLY valid JSON matching the ExecutionPlan schema. No explanation text."""
+Output ONLY valid JSON in exactly this shape (top-level keys are "query" and
+"steps" - do not nest steps under any other key or rename these fields):
+{
+  "query": "<the original user query, verbatim>",
+  "steps": [
+    {
+      "step_id": "step_1",
+      "agent": "research",
+      "task": "<what this step should accomplish>",
+      "depends_on": [],
+      "mode": "sequential",
+      "tools": ["search_articles"]
+    }
+  ],
+  "complexity": "simple",
+  "estimated_steps": 1
+}
+No explanation text, no markdown fences, no extra top-level keys."""
 
 
 class Planner:

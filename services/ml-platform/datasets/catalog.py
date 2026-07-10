@@ -10,8 +10,9 @@ logger = get_logger(__name__)
 
 VALID_DATASET_TYPES = {
     "commodity_prices", "digital_twin", "energy_infrastructure",
-    "entity_relationships", "events", "graph_embeddings", "hybrid",
-    "knowledge_graph", "news_articles", "procurement", "risk_signals", "spr",
+    "entity_relationships", "events", "gkg", "graph_embeddings", "hybrid",
+    "knowledge_graph", "mentions", "news_articles", "procurement",
+    "risk_signals", "spr",
 }
 
 

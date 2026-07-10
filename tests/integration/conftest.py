@@ -35,11 +35,16 @@ def pytest_runtest_setup(item):
 
 # ── Connection info ───────────────────────────────────────────────
 
+# Defaults match docker-compose.yml's dev Postgres (no separate test database
+# is provisioned in this project) -- override via TEST_POSTGRES_* env vars if
+# a dedicated test database is ever set up. The operations these fixtures
+# back (bootstrap_schema's sentinel check, ensure_extension's CREATE
+# EXTENSION IF NOT EXISTS) are idempotent and safe to run against the dev DB.
 PG_HOST = os.getenv("TEST_POSTGRES_HOST", "localhost")
-PG_PORT = int(os.getenv("TEST_POSTGRES_PORT", "5432"))
+PG_PORT = int(os.getenv("TEST_POSTGRES_PORT", "5434"))
 PG_USER = os.getenv("TEST_POSTGRES_USER", "admin")
-PG_PASSWORD = os.getenv("TEST_POSTGRES_PASSWORD", "admin123")
-PG_DB = os.getenv("TEST_POSTGRES_DB", "defenseintel_test")
+PG_PASSWORD = os.getenv("TEST_POSTGRES_PASSWORD", "change-me")
+PG_DB = os.getenv("TEST_POSTGRES_DB", "defenseintel")
 
 ES_HOST = os.getenv("TEST_ELASTICSEARCH_HOST", "localhost")
 ES_PORT = int(os.getenv("TEST_ELASTICSEARCH_PORT", "9200"))

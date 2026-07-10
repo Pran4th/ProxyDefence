@@ -6,8 +6,6 @@ from backend.shared.database import Pool, bootstrap_schema
 from backend.shared.logging_config import get_logger
 from backend.shared.paths import infra_sql
 
-from config import POSTGRES_HOST, POSTGRES_DB
-
 logger = get_logger(__name__)
 
 pool = Pool(min_size=2, max_size=10, search_path="energy,public", pool_name="energy-service")

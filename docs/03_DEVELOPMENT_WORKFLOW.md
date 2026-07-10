@@ -51,16 +51,16 @@ Some services have background Kafka consumers:
 
 | Consumer | Command |
 |----------|---------|
-| ml-consumer | `python services/ml-service/consumer.py` |
+| ml-platform-consumer | `python services/ml-platform/consumer/article_enrichment.py` |
 | embedding-consumer | `python services/embedding-service/consumer.py` |
 | db-consumer | `python services/database-service/consumer.py` |
 
 Run these in separate terminals with PYTHONPATH set:
 
 ```powershell
-cd services/ml-service
-$env:PYTHONPATH = "C:\path\to\ProxyDefence"
-.venv\Scripts\python consumer.py
+cd services/ml-platform
+$env:PYTHONPATH = "C:\path\to\ProxyDefence;C:\path\to\ProxyDefence\services\ml-platform"
+.venv\Scripts\python consumer/article_enrichment.py
 ```
 
 ## Environment Variables
@@ -84,13 +84,12 @@ No hardcoded credentials or URLs in any service.
 
 | Service | Key Variables |
 |---------|--------------|
-| ingest-service | NEWS_API_KEY, KAFKA_BOOTSTRAP_SERVERS |
-| ml-service | KAFKA_BOOTSTRAP_SERVERS |
+| ingest-service | NEWS_API_KEY, NEWSDATA_API_KEY, KAFKA_BOOTSTRAP_SERVERS |
+| ml-platform | POSTGRES_*, KAFKA_BOOTSTRAP_SERVERS, ENERGY_SERVICE_URL, MLFLOW_* |
 | embedding-service | POSTGRES_*, KAFKA_BOOTSTRAP_SERVERS |
 | database-service | POSTGRES_*, ELASTICSEARCH_*, JWT_* |
 | modular-api | POSTGRES_*, ELASTICSEARCH_*, JWT_*, CORS_* |
 | energy-service | POSTGRES_*, ENERGY_LOAD_SEED |
-| ml-platform | POSTGRES_*, ENERGY_SERVICE_URL, MLFLOW_* |
 
 ## PYTHONPATH
 

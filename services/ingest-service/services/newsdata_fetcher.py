@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime
 
 import requests
 
@@ -8,6 +9,18 @@ from config import NEWSDATA_API_KEY, NEWSDATA_API_URL
 from producer import producer
 
 logger = get_logger(__name__)
+
+
+def _normalize_published_at(pub_date: str) -> str:
+    """NewsData.io returns pubDate as "YYYY-MM-DD HH:mm:ss" (UTC, space-separated,
+    no timezone) which Elasticsearch's strict_date_optional_time mapping rejects.
+    Normalize to ISO 8601 to match GNews's publishedAt format."""
+    if not pub_date:
+        return pub_date
+    try:
+        return datetime.strptime(pub_date, "%Y-%m-%d %H:%M:%S").isoformat() + "Z"
+    except ValueError:
+        return pub_date
 
 
 def fetch_newsdata_news():
@@ -49,7 +62,7 @@ def fetch_newsdata_news():
                 "title": article.get("title", ""),
                 "content": content,
                 "source": source_names,
-                "published_at": article.get("pubDate", ""),
+                "published_at": _normalize_published_at(article.get("pubDate", "")),
                 "url": article_url,
                 "image": article.get("image_url", "") or "",
             }

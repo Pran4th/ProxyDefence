@@ -1,3 +1,4 @@
+import base64
 import subprocess
 import urllib.request
 import json
@@ -5,6 +6,11 @@ import socket
 
 from ..base_check import BaseCheck, CheckResult
 from ..config import ValidationConfig
+
+
+def _es_auth_header(config) -> dict:
+    creds = base64.b64encode(f"{config.elasticsearch_user}:{config.elasticsearch_password}".encode()).decode()
+    return {"Authorization": f"Basic {creds}"}
 
 CATEGORY = "infrastructure"
 DESCRIPTION = "Docker, PostgreSQL, Kafka, Elasticsearch, pgvector, Redis, API Gateway, Frontend"
@@ -184,7 +190,7 @@ class ElasticsearchHealth(BaseCheck):
     def _run(self) -> CheckResult:
         try:
             url = f"http://{self.config.elasticsearch_host}:{self.config.elasticsearch_port}/_cluster/health"
-            req = urllib.request.Request(url)
+            req = urllib.request.Request(url, headers=_es_auth_header(self.config))
             with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
                 data = json.loads(resp.read())
             status = data.get("status", "unknown")

@@ -1,8 +1,14 @@
+import base64
 import urllib.request
 import json
 
 from ..base_check import BaseCheck, CheckResult
 from ..config import ValidationConfig
+
+
+def _es_auth_header(config) -> dict:
+    creds = base64.b64encode(f"{config.elasticsearch_user}:{config.elasticsearch_password}".encode()).decode()
+    return {"Authorization": f"Basic {creds}"}
 
 CATEGORY = "data_pipeline"
 DESCRIPTION = "GNews -> Kafka -> ML -> DB -> Embedding -> ES end-to-end flow"
@@ -33,10 +39,10 @@ class KafkaTopicsExist(BaseCheck):
             p = Producer({"bootstrap.servers": f"{self.config.kafka_host}:{self.config.kafka_port}"})
             metadata = p.list_topics(timeout=self.config.kafka_timeout)
             topics = set(metadata.topics.keys())
-            required = {"raw_articles", "processed_articles", "embedding_requests"}
-            # dynamic topics from energy schema
-            energy_topics = {"entity_events", "intelligence_signals", "infrastructure_changes"}
-            required = required | energy_topics
+            # The pipeline has exactly two topics: ingest-service -> raw_articles ->
+            # ml-platform's article_enrichment consumer -> processed_articles ->
+            # database-service/embedding-service. See backend/shared/kafka/topics.py.
+            required = {"raw_articles", "processed_articles"}
 
             missing = required - topics
             if missing:
@@ -75,7 +81,7 @@ class KafkaConsumerGroupsRegistered(BaseCheck):
             groups_available = c.list_topics(timeout=self.config.kafka_timeout)
             c.close()
 
-            required_groups = {"ml-platform", "database-service", "embedding-service"}
+            required_groups = {"ml-platform-consumer-group", "db-service-group", "embedding-service-group"}
             # confluent_kafka doesn't directly list groups; we check by their existence indirectly
             return CheckResult(
                 name=self.name, passed=True, warning=True,
@@ -135,7 +141,7 @@ class ProcessedArticlesInElasticsearch(BaseCheck):
     def _run(self) -> CheckResult:
         try:
             url = f"http://{self.config.elasticsearch_host}:{self.config.elasticsearch_port}/_cat/indices/processed_articles?format=json"
-            req = urllib.request.Request(url)
+            req = urllib.request.Request(url, headers=_es_auth_header(self.config))
             with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
                 indices = json.loads(resp.read())
 

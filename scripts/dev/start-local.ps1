@@ -720,7 +720,11 @@ try {
     } else {
         $healthUrl = "http://localhost:$Port/"
     }
-    if (-not (Wait-ForUrl -Url $healthUrl -Label $Name -TimeoutSec 30)) {
+    # ml-platform imports torch/transformers/spaCy/xgboost at startup, which
+    # routinely takes well over 30s on first load -- give it more headroom
+    # than the other (lighter) services.
+    $healthTimeoutSec = if ($Name -eq "ml-platform") { 90 } else { 30 }
+    if (-not (Wait-ForUrl -Url $healthUrl -Label $Name -TimeoutSec $healthTimeoutSec)) {
         Stop-On-Failure -Stage "Start $Name" -Reason "Health endpoint not reachable at $healthUrl" `
             -LogPath $logFile -ServiceName $Name
     }

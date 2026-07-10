@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -7,6 +8,19 @@ from backend.shared.logging_config import get_logger
 from db import get_es_client, close_es
 
 logger = get_logger(__name__)
+
+
+def _normalize_es_date(value: Any) -> Any:
+    """Elasticsearch's date mapping only accepts strict_date_optional_time or
+    epoch_millis. Upstream sources occasionally emit space-separated,
+    timezone-less timestamps (e.g. "2026-07-09 08:57:00") that fail to parse
+    and drop the whole document -- normalize to ISO 8601 before indexing."""
+    if not isinstance(value, str) or "T" in value:
+        return value
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").isoformat() + "Z"
+    except ValueError:
+        return value
 
 
 def index_article(data: dict[str, Any]) -> None:
@@ -20,7 +34,7 @@ def index_article(data: dict[str, Any]) -> None:
         "title": data.get("title"),
         "content": data.get("content"),
         "source": data.get("source"),
-        "published_at": data.get("published_at"),
+        "published_at": _normalize_es_date(data.get("published_at")),
         "ml_processed": data.get("ml_processed", False),
         "confidence": data.get("confidence", 0.0),
         "sentiment": data.get("sentiment", "neutral"),

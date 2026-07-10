@@ -131,7 +131,14 @@ class TestDatasetValidation:
         assert result2.passed
 
     def test_check_outliers(self):
-        df = pd.DataFrame({"a": list(range(50)) + [1000, 1000], "b": list(range(52))})
+        # check_outliers()'s rate denominator is total numeric cells across
+        # all columns, and its default pass threshold is 5%. A second clean
+        # column dilutes that rate, and too many outliers relative to the
+        # clean baseline inflate the column's own std enough to mask them
+        # from the z-score check entirely -- a single column with a small
+        # clean baseline and few extreme outliers keeps both the z-score
+        # detection and the rate comfortably over threshold (9%).
+        df = pd.DataFrame({"a": list(range(20)) + [1000, 1000]})
         result = check_outliers(df)
         assert not result.passed
 

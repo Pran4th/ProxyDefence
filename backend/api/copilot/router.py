@@ -8,6 +8,7 @@ from backend.api.copilot.schema import CopilotQuery, ConversationCreate
 from backend.api.copilot.service import CopilotService
 from backend.api.common.errors import error_response
 from backend.api_service.security import get_current_user
+from backend.shared.llm.exceptions import LLMRateLimitError
 
 router = APIRouter(prefix="/copilot", tags=["Copilot"])
 
@@ -24,6 +25,12 @@ async def query_copilot(
     try:
         result = await service.query(payload.question, payload.conversation_id)
         return result
+    except LLMRateLimitError:
+        raise error_response(
+            code="LLM_RATE_LIMITED",
+            message="The LLM provider's rate limit was exceeded. Try again shortly.",
+            status_code=503,
+        )
     except Exception:
         raise error_response(code="COPILOT_ERROR", message="Copilot query processing failed", status_code=500)
 

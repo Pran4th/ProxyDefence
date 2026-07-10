@@ -1,20 +1,22 @@
+import json
 import urllib.request
 
 from ..base_check import BaseCheck, CheckResult
 from ..config import ValidationConfig
+from ..auth import get_auth_headers
 
 CATEGORY = "frontend"
-DESCRIPTION = "Frontend pages: Dashboard, RiskDashboard, Copilot, DigitalTwin, Procurement, SPR, GraphExplorer"
+DESCRIPTION = "Frontend pages and the backend endpoints they depend on"
 
 
 def get_checks(config: ValidationConfig):
     return [
         FrontendServesPages(config),
         FrontendApiConnection(config),
-        DashboardPageIntegration(config),
-        ApiArticlesEndpoint(config),
-        ApiAnalyticsEndpoint(config),
-        ApiSearchEndpoint(config),
+        PublicPreviewAccessible(config),
+        ArticlesEndpoint(config),
+        AnalyticsSummaryEndpoint(config),
+        SearchEndpoint(config),
     ]
 
 
@@ -52,7 +54,6 @@ class FrontendApiConnection(BaseCheck):
 
     def _run(self) -> CheckResult:
         try:
-            # Check the frontend's JS bundle or env for VITE_API_URL
             url = f"{self.config.frontend_url}/"
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
@@ -68,44 +69,40 @@ class FrontendApiConnection(BaseCheck):
             return CheckResult(name=self.name, passed=False, message=f"Frontend API check failed: {e}")
 
 
-class DashboardPageIntegration(BaseCheck):
-    name = "Dashboard API data accessible"
-    description = "Backend analytics endpoint returns data for frontend"
+class PublicPreviewAccessible(BaseCheck):
+    name = "Public preview accessible (no auth)"
+    description = "GET /public/preview returns data without a token - what the landing page uses pre-login"
 
     def _run(self) -> CheckResult:
         try:
-            # Check that the analytics endpoint the dashboard uses is available
-            url = f"{self.config.modular_api_url}/api/analytics/summary"
+            url = f"{self.config.modular_api_url}/public/preview"
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
-                import json
                 data = json.loads(resp.read())
             passed = isinstance(data, dict) and len(data) > 0
             return CheckResult(
                 name=self.name, passed=passed,
-                message=f"Analytics endpoint returned data ({len(data)} keys)" if passed else "Empty analytics response",
+                message=f"Public preview returned data ({len(data)} keys)" if passed else "Empty preview response",
                 detail={"keys": list(data.keys())[:10] if isinstance(data, dict) else "non-dict"},
             )
         except urllib.error.HTTPError as e:
-            return CheckResult(
-                name=self.name, passed=True, warning=True,
-                message=f"Analytics endpoint returned HTTP {e.code}",
-                detail={"status": e.code},
-            )
+            return CheckResult(name=self.name, passed=False, message=f"Public preview failed (HTTP {e.code}) - landing page will be blank pre-login")
         except Exception as e:
-            return CheckResult(name=self.name, passed=False, message=f"Dashboard check error: {e}")
+            return CheckResult(name=self.name, passed=False, message=f"Public preview check error: {e}")
 
 
-class ApiArticlesEndpoint(BaseCheck):
-    name = "Articles API endpoint"
-    description = "Backend /api/articles returns data"
+class ArticlesEndpoint(BaseCheck):
+    name = "Articles endpoint"
+    description = "GET /articles returns data (requires auth)"
 
     def _run(self) -> CheckResult:
         try:
-            url = f"{self.config.modular_api_url}/api/articles?limit=5"
-            req = urllib.request.Request(url)
+            headers = get_auth_headers(self.config)
+            if "Authorization" not in headers:
+                return CheckResult(name=self.name, passed=False, message="Could not obtain an auth token")
+            url = f"{self.config.modular_api_url}/articles/?limit=5"
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
-                import json
                 data = json.loads(resp.read())
             articles = data if isinstance(data, list) else data.get("articles", data.get("items", data.get("data", [])))
             count = len(articles) if isinstance(articles, list) else 1
@@ -120,55 +117,52 @@ class ApiArticlesEndpoint(BaseCheck):
             return CheckResult(name=self.name, passed=False, message=f"Articles check error: {e}")
 
 
-class ApiAnalyticsEndpoint(BaseCheck):
-    name = "Analytics API endpoint"
-    description = "Backend analytics endpoints return data"
-
-    def _run(self) -> CheckResult:
-        endpoints = [
-            "/api/analytics/summary",
-            "/api/analytics/trends",
-        ]
-        results = {}
-        any_ok = False
-        for ep in endpoints:
-            try:
-                url = f"{self.config.modular_api_url}{ep}"
-                req = urllib.request.Request(url)
-                with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
-                    import json
-                    data = json.loads(resp.read())
-                results[ep] = {"status": resp.status, "has_data": len(str(data)) > 10}
-                any_ok = True
-            except Exception as e:
-                results[ep] = {"error": str(e)[:100]}
-
-        return CheckResult(
-            name=self.name, passed=any_ok,
-            message=f"{sum(1 for r in results.values() if r.get('has_data'))}/{len(endpoints)} endpoints returning data",
-            detail={"endpoints": results},
-        )
-
-
-class ApiSearchEndpoint(BaseCheck):
-    name = "Search API endpoint"
-    description = "Backend /api/search returns results"
+class AnalyticsSummaryEndpoint(BaseCheck):
+    name = "Analytics summary endpoint"
+    description = "GET /analytics/summary returns data (requires auth)"
 
     def _run(self) -> CheckResult:
         try:
-            url = f"{self.config.modular_api_url}/api/search?q=energy&limit=3"
-            req = urllib.request.Request(url)
+            headers = get_auth_headers(self.config)
+            if "Authorization" not in headers:
+                return CheckResult(name=self.name, passed=False, message="Could not obtain an auth token")
+            url = f"{self.config.modular_api_url}/analytics/summary"
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
-                import json
+                data = json.loads(resp.read())
+            passed = isinstance(data, dict) and len(data) > 0
+            return CheckResult(
+                name=self.name, passed=passed,
+                message=f"Analytics endpoint returned data ({len(data)} keys)" if passed else "Empty analytics response",
+                detail={"keys": list(data.keys())[:10] if isinstance(data, dict) else "non-dict"},
+            )
+        except urllib.error.HTTPError as e:
+            return CheckResult(name=self.name, passed=False, message=f"Analytics endpoint HTTP {e.code}")
+        except Exception as e:
+            return CheckResult(name=self.name, passed=False, message=f"Analytics check error: {e}")
+
+
+class SearchEndpoint(BaseCheck):
+    name = "Search endpoint"
+    description = "GET /search returns results (requires auth)"
+
+    def _run(self) -> CheckResult:
+        try:
+            headers = get_auth_headers(self.config)
+            if "Authorization" not in headers:
+                return CheckResult(name=self.name, passed=False, message="Could not obtain an auth token")
+            url = f"{self.config.modular_api_url}/search/?q=energy&limit=3"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
                 data = json.loads(resp.read())
             results = data if isinstance(data, list) else data.get("results", data.get("items", data.get("data", [])))
             count = len(results) if isinstance(results, list) else 1
             return CheckResult(
-                name=self.name, passed=count > 0,
-                message=f"{count} search results for 'energy'" if count > 0 else "No search results",
+                name=self.name, passed=True, warning=count == 0,
+                message=f"{count} search results for 'energy'" if count > 0 else "Search endpoint OK, no results for 'energy' yet",
                 detail={"count": count},
             )
         except urllib.error.HTTPError as e:
-            return CheckResult(name=self.name, passed=True, warning=True, message=f"Search endpoint HTTP {e.code}")
+            return CheckResult(name=self.name, passed=False, message=f"Search endpoint HTTP {e.code}")
         except Exception as e:
             return CheckResult(name=self.name, passed=False, message=f"Search check error: {e}")

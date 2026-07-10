@@ -19,11 +19,11 @@ The workspace includes `.vscode/launch.json` with debug configurations for every
 | Configuration | Service | Port |
 |--------------|---------|------|
 | Ingest Service | ingest-service | 8001 |
-| ML Service | ml-service | 8002 |
 | Embedding Service | embedding-service | 8005 |
 | Database Service | database-service | 8003 |
 | Energy Service | energy-service | 8006 |
 | ML Platform | ml-platform | 8007 |
+| ML Platform Consumer | ml-platform (consumer/article_enrichment.py) | n/a (Kafka consumer, no HTTP port) |
 | Modular API | modular-api | 8000 |
 
 ### How to Debug

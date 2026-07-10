@@ -2,7 +2,6 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from backend.api.agents.intelligence import IntelligenceAgent
-from backend.api.agents.registry import agent_registry
 from backend.api.copilot.repository import CopilotRepository
 from backend.shared.llm.memory import memory_store
 from backend.shared.llm.schemas import AgentResponse

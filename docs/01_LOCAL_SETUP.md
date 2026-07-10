@@ -118,6 +118,12 @@ Useful flags: `-SkipInfra` (Postgres/Kafka/ES already running),
 `-SkipFrontend`, `-SkipCleanup` (skip killing stray old processes / port
 checks), `-Force` (non-interactive, auto-confirm prompts).
 
+**ml-platform takes longer to become healthy than the other five services** — it
+imports torch/transformers/spaCy/xgboost at startup, which routinely takes
+60-90s on a cold start (Python import, not model download). The launcher
+gives it a 90s health-check window (vs 30s for the others); if you ever
+start it manually and it looks stuck, that's normal — wait, don't restart it.
+
 **If infra containers keep disappearing between sessions:** `kafka`,
 `elasticsearch`, and `zookeeper` used to have no restart policy in
 `docker-compose.yml`, so a Docker Desktop restart silently dropped them
@@ -153,16 +159,46 @@ Shows health-endpoint status for every service plus infra port checks. Then:
 ```powershell
 $env:PYTHONPATH = "C:\path\to\ProxyDefence"
 services/modular-api/.venv/Scripts/python.exe -m pytest tests/unit -q
+
+# Integration tests are skipped by default -- need the full stack up first,
+# and the flag to opt in:
+services/modular-api/.venv/Scripts/python.exe -m pytest tests/integration -q --run-integration
+
+# ml-platform has its own test tree, run from its own venv (has
+# numpy/pandas/xgboost/confluent-kafka that modular-api's venv doesn't):
+$env:PYTHONPATH = "C:\path\to\ProxyDefence;C:\path\to\ProxyDefence\services\ml-platform"
+services/ml-platform/.venv/Scripts/python.exe -m pytest services/ml-platform -q
 ```
 
 Unit tests (`tests/unit/`) need no running services — they're pure logic
 tests. `tests/integration/` needs the full stack up (Postgres/ES/Kafka +
-`modular-api` running) since they hit real HTTP endpoints. If pytest reports
-a collection error (`AttributeError: 'Package' object has no attribute
-'obj'`) instead of running any tests, your venv has the broken
+`modular-api` running) since they hit real HTTP endpoints; most use a mocked
+DB pool, but `test_auth_api.py` connects to the real dev database (register/
+login need genuine INSERT...RETURNING behavior a mock can't simulate). If
+pytest reports a collection error (`AttributeError: 'Package' object has no
+attribute 'obj'`) instead of running any tests, your venv has the broken
 `pytest==8.0.0` + `pytest-asyncio==0.23.x` combo — re-run
 `scripts/dev/setup/setup.ps1 -Force` to pick up the pinned fix
 (`pytest-asyncio==0.24.0`).
+
+### Full end-to-end validation (beyond pytest)
+
+`validation/` is a separate, standalone framework (not pytest-based) that
+exercises every live service over real HTTP/DB/ES/Kafka in one pass —
+infra connectivity, all 6 services' health, the full ingest→Kafka→ML→DB→ES
+pipeline, dataset catalog, feature store, model registry, inference,
+AI/agents/copilot/RAG, GDELT pipeline, and the frontend + the endpoints it
+depends on:
+
+```powershell
+$env:PYTHONPATH = "C:\path\to\ProxyDefence"
+services/modular-api/.venv/Scripts/python.exe -m validation.runner
+```
+
+Needs the full stack running (see step 4). Writes `validation_report.json`
+and `.html` with a pass/fail/warning breakdown per category. It registers
+its own `validation-suite@proxydefence-test.io` account to get an auth
+token for protected routes, so no manual login is needed first.
 
 ## 6. Stopping
 

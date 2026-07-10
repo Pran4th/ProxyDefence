@@ -73,7 +73,7 @@ class ReflectionEngine:
         )
         messages.append({"role": "user", "content": f"Query: {query}\n\nCollected evidence:\n{evidence_text}\n\nEvaluate sufficiency."})
 
-        for _ in range(max_iterations):
+        for attempt in range(max_iterations):
             try:
                 settings = LLMConfig.load().settings_for(temperature_preset="precise")
                 content, _, _ = await self._llm.chat(messages=messages, settings=settings)
@@ -96,7 +96,7 @@ class ReflectionEngine:
                 return result
 
             except (json.JSONDecodeError, KeyError) as e:
-                logger.warning("Reflection parse error (attempt %d): %s", _ + 1, e)
+                logger.warning("Reflection parse error (attempt %d): %s", attempt + 1, e)
                 continue
 
         fallback = ReflectionResult(

@@ -14,9 +14,14 @@ class TestHealthBuilder:
         import importlib
         from backend.shared import config
         importlib.reload(config)
+        # HealthBuilder.__init__'s `version` default is bound to SERVICE_VERSION
+        # at module-import time (Python evaluates default args once, at def
+        # time) -- the health module must be reloaded too so it re-reads the
+        # freshly-reloaded config.
+        from backend.shared.observability import health as health_module
+        importlib.reload(health_module)
 
-        from backend.shared.observability.health import HealthBuilder
-        health = HealthBuilder("test-service")
+        health = health_module.HealthBuilder("test-service")
         assert health._service_name == "test-service"
         assert health._version == "2.0.0-test"
 
