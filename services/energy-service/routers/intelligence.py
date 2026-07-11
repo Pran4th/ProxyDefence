@@ -409,6 +409,32 @@ async def get_entity_risk_profile(
     }
 
 
+# ── Corridor & supplier disruption probability ──────────────────────────────
+
+
+@router.get("/corridors")
+async def list_corridor_risk(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Live 30-day disruption probability per import corridor, with named
+    drivers and published assumptions (see services/corridor_risk.py)."""
+    from services.corridor_risk import CorridorRiskEngine
+
+    engine = CorridorRiskEngine(pool)
+    return await engine.compute_all()
+
+
+@router.get("/suppliers/risk")
+async def list_supplier_risk(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Composite supplier disruption exposure (own risk × corridor risk)."""
+    from services.corridor_risk import CorridorRiskEngine
+
+    engine = CorridorRiskEngine(pool)
+    return await engine.supplier_risk()
+
+
 # ── Knowledge Graph Risk Propagation ────────────────────────────────────────
 
 

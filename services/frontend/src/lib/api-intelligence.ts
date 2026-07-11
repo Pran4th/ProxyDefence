@@ -117,3 +117,57 @@ export async function fetchSanctions(params?: {
   const { data } = await api.get(`${BASE}/sanctions`, { params });
   return data;
 }
+
+// ── Corridor & supplier disruption probability ──────────────────────────
+
+export interface CorridorDriver {
+  signal_uuid: string;
+  title: string;
+  severity: string;
+  detected_at: string;
+  weight: number;
+}
+
+export interface CorridorRisk {
+  key: string;
+  name: string;
+  probability_30d: number;
+  confidence: number;
+  components: {
+    signal_pressure: number | null;
+    entity_risk: number | null;
+    instability: number | null;
+    ais_anomaly: number | null;
+  };
+  drivers: CorridorDriver[];
+  india_import_share_pct: number;
+  india_import_share_year: number | null;
+  polyline: [number, number][];
+}
+
+export interface CorridorRiskResponse {
+  corridors: CorridorRisk[];
+  assumptions: { name: string; value: unknown; source: string; how_to_test: string }[];
+  ais_snapshot_at: string | null;
+  computed_at: string;
+}
+
+export interface SupplierRisk {
+  supplier_uuid: string;
+  name: string;
+  country: string | null;
+  iso_code: string | null;
+  own_risk: number;
+  corridor_factor: number;
+  disruption_probability_30d: number;
+}
+
+export async function fetchCorridorRisk(): Promise<CorridorRiskResponse> {
+  const { data } = await api.get(`${BASE}/corridors`);
+  return data;
+}
+
+export async function fetchSupplierRisk(): Promise<{ items: SupplierRisk[]; total: number }> {
+  const { data } = await api.get(`${BASE}/suppliers/risk`);
+  return data;
+}

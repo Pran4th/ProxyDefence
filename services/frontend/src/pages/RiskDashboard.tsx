@@ -29,6 +29,7 @@ import {
 } from "recharts";
 import AppShell from "@/components/AppShell";
 import MetricCard from "@/components/MetricCard";
+import CorridorRiskStrip from "@/components/CorridorRiskStrip";
 import {
   Card,
   CardContent,
@@ -174,6 +175,11 @@ const RiskDashboardPage = () => {
           <Zap className="h-4 w-4" />
           Energy Assets
         </Button>
+      </div>
+
+      {/* Corridor disruption probability */}
+      <div className="mb-6">
+        <CorridorRiskStrip />
       </div>
 
       {/* Metric Cards */}
