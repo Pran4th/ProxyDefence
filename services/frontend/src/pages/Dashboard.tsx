@@ -25,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchDashboardStats,
   fetchTopEvents,
@@ -126,6 +127,7 @@ const MetricTile = ({
   trend = "neutral",
   trendValue,
   variant = "default",
+  loading = false,
 }: {
   title: string;
   value: string | number;
@@ -133,13 +135,18 @@ const MetricTile = ({
   trend?: "up" | "down" | "neutral";
   trendValue?: string;
   variant?: MetricVariant;
+  loading?: boolean;
 }) => (
   <div className="relative overflow-hidden rounded-md border border-border bg-card py-5 pl-5 pr-4">
     <span className={cn("absolute inset-y-0 left-0 w-1", metricTabClass[variant])} aria-hidden="true" />
     <div className="flex items-start justify-between gap-3">
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{title}</p>
-        <p className="mt-2 font-mono text-3xl font-semibold tabular-nums">{value}</p>
+        {loading ? (
+          <Skeleton className="mt-2 h-8 w-16" />
+        ) : (
+          <p className="mt-2 font-mono text-3xl font-semibold tabular-nums">{value}</p>
+        )}
         {trendValue && (
           <p className={cn("mt-1 text-xs", metricTrendClass[trend])}>{trendValue}</p>
         )}
@@ -308,45 +315,50 @@ const Dashboard = () => {
       <div className="grid gap-5 lg:grid-cols-4">
         <MetricTile
           title="Tracked events"
-          value={loading ? "..." : stats?.events ?? 0}
+          value={stats?.events ?? 0}
           icon={CalendarDays}
           trend="up"
           trendValue="Tracked intelligence events"
+          loading={loading}
         />
 
         <MetricTile
           title="Open alerts"
-          value={loading ? "..." : stats?.open_alerts ?? 0}
+          value={stats?.open_alerts ?? 0}
           icon={AlertTriangle}
           trend="up"
           trendValue="Active analyst alerts"
           variant="threat"
+          loading={loading}
         />
 
         <MetricTile
           title="Active cases"
-          value={loading ? "..." : stats?.cases ?? 0}
+          value={stats?.cases ?? 0}
           icon={Shield}
           trend="neutral"
           trendValue="Active investigations"
+          loading={loading}
         />
 
         <MetricTile
           title="Reports filed"
-          value={loading ? "..." : stats?.reports ?? 0}
+          value={stats?.reports ?? 0}
           icon={FileText}
           trend="up"
           trendValue="Generated intelligence briefs"
           variant="safe"
+          loading={loading}
         />
       </div>
       <div className="mt-5 grid gap-5 lg:grid-cols-4">
         <MetricTile
-          title="Avg risk score"
-          value={stats?.average_risk_score?.toFixed(2) ?? "0"}
+          title="Avg risk level"
+          value={`${Math.round((stats?.average_risk_score ?? 0) * 100)}%`}
           icon={BarChart3}
           trend="neutral"
-          trendValue="Average event risk"
+          trendValue="Average risk across all tracked events"
+          loading={loading}
         />
 
         <MetricTile
@@ -356,6 +368,7 @@ const Dashboard = () => {
           trend="up"
           trendValue="High severity events"
           variant="warning"
+          loading={loading}
         />
 
         <MetricTile
@@ -365,6 +378,7 @@ const Dashboard = () => {
           trend="up"
           trendValue="Critical severity events"
           variant="threat"
+          loading={loading}
         />
 
         <MetricTile
@@ -373,6 +387,7 @@ const Dashboard = () => {
           icon={Shield}
           trend="neutral"
           trendValue="Active monitoring lists"
+          loading={loading}
         />
       </div>
 

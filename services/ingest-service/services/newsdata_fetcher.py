@@ -7,6 +7,7 @@ from backend.shared.logging_config import get_logger
 
 from config import NEWSDATA_API_KEY, NEWSDATA_API_URL
 from producer import producer
+from services.response_decoding import decode_json
 
 logger = get_logger(__name__)
 
@@ -41,7 +42,7 @@ def fetch_newsdata_news():
     try:
         response = requests.get(NEWSDATA_API_URL, params=params, timeout=15)
         response.raise_for_status()
-        articles = response.json().get("results", [])
+        articles = decode_json(response).get("results", [])
 
         logger.info("newsdata_fetched_articles", count=len(articles))
         published = 0

@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { searchArticles, type Article } from "@/lib/api";
+import { ThreatBadge } from "@/lib/riskFormat";
 
 const TOPICS = ["war", "diplomacy", "economics", "cyber", "general"];
 const RISK_LEVELS = ["low", "medium", "high", "critical"];
@@ -209,9 +210,7 @@ const Search = () => {
                     Risk: {article.risk_level}
                   </span>
                 )}
-                <span className="rounded-full border px-3 py-1 text-xs">
-                  Threat: {Math.round(article.threat_score || 0)}
-                </span>
+                <ThreatBadge score={article.threat_score} />
               </div>
             </Link>
           ))}

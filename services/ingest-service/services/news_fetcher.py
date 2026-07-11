@@ -8,6 +8,7 @@ from backend.shared.logging_config import get_logger
 
 from config import NEWS_API_KEY, NEWS_API_URL
 from producer import producer
+from services.response_decoding import decode_json
 
 logger = get_logger(__name__)
 
@@ -28,7 +29,7 @@ def fetch_real_news():
     try:
         response = requests.get(NEWS_API_URL, params=params)
         response.raise_for_status()
-        articles = response.json().get("articles", [])
+        articles = decode_json(response).get("articles", [])
 
         logger.info("gnews_fetched_articles", count=len(articles))
         for article in articles:

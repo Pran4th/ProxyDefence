@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(20) NOT NULL DEFAULT 'analyst',
+    organization TEXT,
+    location TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

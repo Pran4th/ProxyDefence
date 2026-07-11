@@ -15,6 +15,21 @@ from backend.shared.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
+def _ensure_dict(val: Any) -> dict:
+    """asyncpg doesn't auto-decode jsonb columns to Python objects on this
+    pool, so a jsonb column comes back as a raw JSON string unless parsed
+    here (same pattern as procurement/spr_engine.py::_ensure_dict)."""
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return {}
+
+
 # ── Data types ──────────────────────────────────────────────────────────────
 
 RISK_DIMENSIONS = ["geopolitical", "operational", "economic", "environmental"]
@@ -230,6 +245,8 @@ class RiskScoringEngine:
     async def score_and_persist(self, entity_uuid: str, entity_type: str) -> dict[str, Any]:
         scores = await self.score_entity(entity_uuid, entity_type)
         for dim, val in scores.items():
+            if not isinstance(val, (int, float)):
+                continue  # e.g. the "ml" blend-metadata block _blend_with_ml() adds, not a score
             await self.persist_score(entity_uuid, entity_type, dim, val)
         return scores
 
@@ -311,6 +328,13 @@ class SignalDetector:
         await engine.score_and_persist(entity_uuid, entity_type)
 
     async def evaluate_scenario(self, scenario: dict[str, Any]) -> dict[str, Any]:
+        """Evaluates a what-if scenario against the real current risk picture:
+        baseline dimension scores come from actual active disruption_signals
+        and risk_factors (same query RiskScoringEngine.score_entity uses),
+        the scenario's assumptions apply as a stress modulation on top of
+        that real baseline (not as the sole input), and the overall score is
+        blended with the trained ML classifier via MLBridge -- the same
+        real-scoring path used everywhere else in this engine."""
         pool = await self._pool_or_default()
 
         scenario_uuid = str(uuid.uuid4())
@@ -330,20 +354,31 @@ class SignalDetector:
             scenario.get("created_by", "system"),
         )
 
+        active_signals = await pool.fetch(
+            """SELECT * FROM energy.disruption_signals
+               WHERE expires_at > NOW() AND severity IN ('elevated','high','critical')"""
+        )
+        risk_factors = await pool.fetch(
+            "SELECT * FROM energy.risk_factors WHERE is_active = true"
+        )
+
         engine = RiskScoringEngine(self._pool)
         scores = {}
         for dim in risk_dimensions:
-            mock_signals = []
-            for assumption, value in assumptions.items():
-                if isinstance(value, (int, float)) and value > 0.5:
-                    mock_signals.append({
-                        "severity": "elevated" if value < 0.7 else "high",
-                        "confidence": min(value, 0.95),
-                        "risk_dimension": dim,
-                    })
-            scores[dim] = engine._compute_dimension_score(mock_signals, [])
+            dim_signals = [s for s in active_signals if s["risk_dimension"] == dim]
+            baseline = engine._compute_dimension_score(dim_signals, risk_factors)
 
-        scores["overall"] = max(scores.values()) if scores else 0.5
+            # Assumption values > 0.5 represent a stress condition the user
+            # is asking "what if" about for this dimension -- modulate the
+            # real baseline upward rather than replacing it outright.
+            stress = max(
+                (float(v) for k, v in assumptions.items() if isinstance(v, (int, float)) and v > 0.5),
+                default=0.0,
+            )
+            scores[dim] = min(1.0, baseline + stress * (1 - baseline) * 0.6)
+
+        scores["overall"] = max(scores.values()) if scores else 0.05
+        scores = await engine._blend_with_ml(scores, scenario_uuid, "scenario", active_signals)
 
         risk_level = self._score_to_level(scores["overall"])
         return {
@@ -442,257 +477,204 @@ class DataIngestor:
 
 
 class CommodityPriceIngestor(DataIngestor):
-    """Ingests commodity benchmark prices and detects price volatility signals."""
+    """Commodity benchmark price ingestion -- not yet wired to a live source.
+
+    Previously generated fabricated prices via hash-based jitter around
+    hardcoded base values, presented as if real. Removed rather than left
+    running: the only live price data currently ingested anywhere in this
+    platform is ml-platform's crude-price-api dataset (Brent spot only, one
+    of the ten benchmarks this class claimed to cover), so a real
+    implementation needs either per-commodity live sources or an honest
+    reduction in scope to what's actually available -- not fake numbers for
+    the other nine."""
 
     source_name = "commodity_prices"
 
     async def ingest(self) -> int:
-        pool = await self._pool_or_default()
-
-        benchmarks = [
-            ("Brent Crude", "crude", 85.0, "USD/bbl"),
-            ("WTI Crude", "crude", 78.0, "USD/bbl"),
-            ("Dubai Crude", "crude", 82.0, "USD/bbl"),
-            ("LNG Japan-Korea Marker", "lng", 12.5, "USD/MMBtu"),
-            ("TTF Natural Gas", "natural_gas", 35.0, "EUR/MWh"),
-            ("Henry Hub Natural Gas", "natural_gas", 3.2, "USD/MMBtu"),
-            ("Gasoline RBOB", "refined", 2.5, "USD/gal"),
-            ("ULSD Diesel", "refined", 2.8, "USD/gal"),
-            ("Jet Fuel", "refined", 2.6, "USD/gal"),
-            ("Fuel Oil 3.5%", "refined", 450.0, "USD/MT"),
-        ]
-
-        count = 0
-        now = datetime.now(timezone.utc)
-        for name, family, base_price, unit in benchmarks:
-            jitter = (hash(name + str(now.hour)) % 100) / 100 * 2 - 1
-            price = round(base_price * (1 + jitter * 0.03), 2)
-            change_pct = round(jitter * 3, 2)
-            await pool.execute(
-                """INSERT INTO energy.commodity_prices
-                   (uuid, commodity_name, commodity_family, price, unit,
-                    change_pct, source, recorded_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8)""",
-                str(uuid.uuid4()), name, family, price, unit,
-                change_pct, f"{self.source_name}/simulated", now,
-            )
-            count += 1
-
-        logger.info("ingested commodity prices", count=count)
-        return count
+        raise NotImplementedError("CommodityPriceIngestor has no live data source wired yet")
 
     async def detect_signals(self, detector: SignalDetector) -> list[dict]:
-        pool = await self._pool_or_default()
-        signals = []
-
-        rows = await pool.fetch(
-            """SELECT commodity_name, price, change_pct, recorded_at
-               FROM energy.commodity_prices
-               WHERE recorded_at > NOW() - INTERVAL '1 hour'
-               ORDER BY ABS(change_pct) DESC LIMIT 5"""
-        )
-
-        for row in rows:
-            if abs(row["change_pct"]) > 5:
-                severity = "high" if abs(row["change_pct"]) > 10 else "elevated"
-                signal_data = {
-                    "title": f"Price spike detected: {row['commodity_name']}",
-                    "description": f"{row['commodity_name']} moved {row['change_pct']:+.1f}% to ${row['price']:.2f}",
-                    "source": self.source_name,
-                    "severity": severity,
-                    "risk_dimension": "economic",
-                    "affected_entity_type": "commodities",
-                    "affected_commodities": [row["commodity_name"]],
-                    "confidence": min(abs(row["change_pct"]) / 20, 0.95),
-                }
-                created = await detector.ingest_signal(signal_data)
-                signals.append(created)
-
-        return signals
+        raise NotImplementedError("CommodityPriceIngestor has no live data source wired yet")
 
 
 # ── Sanctions ingestor ──────────────────────────────────────────────────────
 
 
 class SanctionsIngestor(DataIngestor):
-    """Ingests sanctions data and creates geopolitical risk signals."""
+    """Country-level sanctions program ingestion -- not yet wired to a live source.
+
+    Previously upserted a static hand-typed 10-country list every time it ran,
+    entirely disconnected from the real ~330k-record OFAC/EU/OpenSanctions
+    catalog ml-platform already ingests. That catalog is individual/entity
+    level (specific designated persons and companies), not the country-program
+    summary shape (country_code, scope, imposed_by) this table expects, so a
+    real implementation needs an aggregation step, not a direct swap."""
 
     source_name = "sanctions"
 
     async def ingest(self) -> int:
-        pool = await self._pool_or_default()
-
-        sanctions = [
-            ("IR", "Iran", "Comprehensive", "US, EU, UN", "crude, petrochemicals", "primary"),
-            ("RU", "Russia", "Energy Sector", "US, EU, UK, G7", "crude, refined products, lng", "primary"),
-            ("VE", "Venezuela", "Comprehensive", "US", "crude, refined products", "primary"),
-            ("SD", "Sudan", "Restricted", "US, EU", "crude", "primary"),
-            ("KP", "North Korea", "Comprehensive", "UN, US, EU, Japan, ROK", "all energy", "primary"),
-            ("MM", "Myanmar", "Sectoral", "US, EU, UK", "gas", "secondary"),
-            ("SY", "Syria", "Comprehensive", "US, EU, Arab League", "crude, refined products", "primary"),
-            ("LB", "Libya", "Arms Embargo", "UN, EU", "crude (indirect)", "secondary"),
-            ("IQ", "Iraq", "Restricted", "UN (historic)", "crude", "expired"),
-            ("BY", "Belarus", "Sectoral", "US, EU, UK", "refined products", "secondary"),
-        ]
-
-        count = 0
-        for code, country, scope, imposed_by, affected_commodities, status in sanctions:
-            await pool.execute(
-                """INSERT INTO energy.sanctions
-                   (uuid, country_code, country_name, sanction_scope, imposed_by,
-                    affected_commodities, status, source)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-                   ON CONFLICT (country_code, sanction_scope) DO UPDATE
-                   SET imposed_by = EXCLUDED.imposed_by,
-                       status = EXCLUDED.status,
-                       updated_at = NOW()""",
-                str(uuid.uuid4()), code, country, scope, imposed_by,
-                affected_commodities, status, self.source_name,
-            )
-            count += 1
-
-        logger.info("ingested sanctions", count=count)
-        return count
+        raise NotImplementedError("SanctionsIngestor has no live data source wired yet")
 
     async def detect_signals(self, detector: SignalDetector) -> list[dict]:
-        pool = await self._pool_or_default()
-        signals = []
-
-        rows = await pool.fetch(
-            """SELECT * FROM energy.sanctions
-               WHERE status = 'primary' AND is_active = true"""
-        )
-
-        for row in rows:
-            signal_data = {
-                "title": f"Active sanctions: {row['country_name']}",
-                "description": f"{row['sanction_scope']} sanctions by {row['imposed_by']} affecting {row['affected_commodities']}",
-                "source": self.source_name,
-                "severity": "high",
-                "risk_dimension": "geopolitical",
-                "affected_regions": [row["country_code"]],
-                "confidence": 0.9,
-            }
-            created = await detector.ingest_signal(signal_data)
-            signals.append(created)
-
-        return signals
+        raise NotImplementedError("SanctionsIngestor has no live data source wired yet")
 
 
 # ── AIS / Port congestion ingestor ──────────────────────────────────────────
 
 
 class AISIngestor(DataIngestor):
-    """Simulates AIS vessel position and port congestion data."""
+    """AIS vessel position / port congestion ingestion -- not yet wired to a live source.
+
+    Previously generated fabricated congestion percentages, vessel counts,
+    and tanker availability via hash-based jitter, presented as if real. The
+    genuinely live equivalent (ml-platform's scripts/ingest_aisstream.py,
+    real AISstream.io vessel positions near major chokepoints) writes to a
+    flat CSV file, not a queryable table energy-service can join against per
+    request -- a real implementation needs that data exposed through an API
+    (or registered in ml.dataset_catalog and read via ml-platform's HTTP
+    surface), not a direct swap."""
 
     source_name = "ais"
 
     async def ingest(self) -> int:
-        pool = await self._pool_or_default()
-        now = datetime.now(timezone.utc)
-
-        chokepoints = [
-            ("Strait of Hormuz", 25.2959, 56.2993, "chokepoint"),
-            ("Strait of Malacca", 1.4358, 102.4487, "chokepoint"),
-            ("Bab-el-Mandeb", 12.5916, 43.4223, "chokepoint"),
-            ("Suez Canal", 30.5054, 32.5524, "chokepoint"),
-            ("Turkish Straits", 41.1072, 29.0637, "chokepoint"),
-            ("Panama Canal", 9.0810, -79.6844, "chokepoint"),
-            ("Cape of Good Hope", -34.3571, 18.4744, "chokepoint"),
-            ("Danish Straits", 55.6949, 10.6666, "chokepoint"),
-        ]
-
-        ports = [
-            ("Ras Tanura", 26.6420, 50.1620, "Saudi Arabia", 500000),
-            ("Fujairah", 25.1198, 56.3389, "UAE", 400000),
-            ("Rotterdam", 51.8985, 4.5012, "Netherlands", 350000),
-            ("Singapore", 1.2833, 103.8333, "Singapore", 600000),
-            ("Shanghai", 31.2304, 121.4737, "China", 800000),
-            ("Houston", 29.7589, -94.9867, "USA", 450000),
-            ("Antwerp", 51.2657, 4.3488, "Belgium", 300000),
-            ("Mina Al Ahmadi", 29.0769, 48.0833, "Kuwait", 350000),
-            ("Basra", 30.5154, 47.8314, "Iraq", 250000),
-            ("Tianjin", 38.9985, 117.7087, "China", 500000),
-            ("Yanbu", 24.0908, 38.0641, "Saudi Arabia", 300000),
-            ("Port Arthur", 29.8833, -93.9333, "USA", 350000),
-            ("Marseille", 43.2965, 5.3698, "France", 200000),
-            ("Sikka", 22.4360, 69.8000, "India", 250000),
-            ("Ulsan", 35.5384, 129.3169, "South Korea", 400000),
-        ]
-
-        count = 0
-        for name, lat, lng, country, congestion_base in ports:
-            congestion_pct = min(100, max(10, congestion_base / 10000 + (hash(name + str(now.hour)) % 50 - 25)))
-            await pool.execute(
-                """INSERT INTO energy.port_congestion
-                   (uuid, port_name, country, latitude, longitude,
-                    congestion_pct, waiting_vessels, avg_wait_hours, recorded_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
-                str(uuid.uuid4()), name, country, lat, lng,
-                round(congestion_pct, 1),
-                int(congestion_pct / 5),
-                round(congestion_pct / 10, 1),
-                now,
-            )
-            count += 1
-
-        for name, lat, lng, kind in chokepoints:
-            vessel_count = hash(name + str(now.hour)) % 25 + 5
-            avg_speed_knots = round(8 + (hash(name + str(now.hour+1)) % 100) / 100 * 8, 1)
-            await pool.execute(
-                """INSERT INTO energy.ais_positions
-                   (uuid, location_name, latitude, longitude, location_type,
-                    vessel_count, avg_speed_knots, recorded_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8)""",
-                str(uuid.uuid4()), name, lat, lng, kind,
-                vessel_count, avg_speed_knots, now,
-            )
-            count += 1
-
-        tanker_data = [
-            ("VLCC", 42, 310, 3.8),
-            ("Suezmax", 28, 200, 4.2),
-            ("Aframax", 35, 250, 3.5),
-            ("LR2", 18, 80, 5.1),
-            ("LR1", 22, 95, 4.8),
-            ("MR", 30, 120, 4.0),
-        ]
-
-        for vessel_type, available, total, avg_rate in tanker_data:
-            utilization = 1 - (available / total)
-            await pool.execute(
-                """INSERT INTO energy.tanker_availability
-                   (uuid, vessel_type, vessels_available, total_vessels,
-                    avg_daily_rate_usd, utilization_pct, recorded_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7)""",
-                str(uuid.uuid4()), vessel_type, available, total,
-                round(avg_rate * 10000), round(utilization * 100, 1), now,
-            )
-
-        return count
+        raise NotImplementedError("AISIngestor has no live data source wired yet")
 
     async def detect_signals(self, detector: SignalDetector) -> list[dict]:
-        pool = await self._pool_or_default()
-        signals = []
+        raise NotImplementedError("AISIngestor has no live data source wired yet")
 
-        congested = await pool.fetch(
-            """SELECT * FROM energy.port_congestion
-               WHERE congestion_pct > 70 AND recorded_at > NOW() - INTERVAL '2 hours'
-               ORDER BY congestion_pct DESC LIMIT 5"""
+
+# ── Article-derived signal ingestor (real) ──────────────────────────────────
+
+
+class ArticleSignalIngestor(DataIngestor):
+    """Generates real disruption signals from the live news pipeline.
+
+    Unlike the three disabled ingestors above, this one has a genuinely live
+    source already flowing through this same database: processed_articles
+    carries real ML output (trained XGBoost topic classifier + GDELT-blended
+    threat score, see ml-platform/consumer/article_enrichment.py), and
+    energy_entity_mappings already links articles to real energy.* catalog
+    entities (ports/pipelines/refineries/SPRs/etc, matched by
+    database-service/services/energy_enrichment.py on ingest). This reuses
+    that pipeline instead of adding a new external source -- every field on
+    the resulting signal traces back to a real article, not a fabrication.
+    """
+
+    source_name = "news_signals"
+
+    MIN_THREAT_SCORE = 40.0
+    LOOKBACK_HOURS = 24 * 14
+    ARTICLE_SCAN_LIMIT = 150
+    MAX_ENTITIES_PER_ARTICLE = 3
+    SIGNAL_TTL_HOURS = 72
+
+    TOPIC_TO_DIMENSION = {
+        "war": "geopolitical",
+        "diplomacy": "geopolitical",
+        "economics": "economic",
+        "cyber": "operational",
+        "general": "operational",
+    }
+
+    async def ingest(self) -> int:
+        """Scans recent, high-threat, energy-matched articles that haven't
+        produced a signal yet and inserts one real disruption_signals row
+        per (article, matched entity) pair, capped per article. Returns the
+        number of signals created."""
+        pool = await self._pool_or_default()
+        # processed_articles.published_at/created_at are naive TIMESTAMP
+        # columns (unlike energy.* which is TIMESTAMPTZ throughout), so the
+        # cutoff passed to that comparison must be naive UTC too, or asyncpg
+        # errors on offset-aware vs offset-naive comparison.
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=self.LOOKBACK_HOURS)
+
+        rows = await pool.fetch(
+            """
+            WITH candidate_articles AS (
+                SELECT pa.id, pa.title, pa.summary, pa.content, pa.url,
+                       COALESCE(pa.published_at, pa.created_at) AS published_at,
+                       pa.threat_score, pa.topic, pa.confidence
+                FROM processed_articles pa
+                WHERE pa.threat_score >= $1
+                  AND COALESCE(pa.published_at, pa.created_at) > $2
+                  AND EXISTS (SELECT 1 FROM energy_entity_mappings eem WHERE eem.article_id = pa.id)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM energy.disruption_signals ds
+                      WHERE ds.source = 'article:' || pa.id::text
+                  )
+                ORDER BY pa.threat_score DESC
+                LIMIT $3
+            )
+            SELECT DISTINCT ON (ca.id, eem.energy_asset_uuid)
+                ca.id AS article_id, ca.title, ca.summary, ca.content, ca.url,
+                ca.published_at, ca.threat_score, ca.topic, ca.confidence,
+                eem.energy_asset_type, eem.energy_asset_uuid, eem.energy_asset_name,
+                eem.match_method, aee.context
+            FROM candidate_articles ca
+            JOIN energy_entity_mappings eem ON eem.article_id = ca.id
+            LEFT JOIN article_energy_enrichments aee ON aee.article_id = ca.id
+            ORDER BY ca.id, eem.energy_asset_uuid,
+                     CASE WHEN eem.match_method = 'exact' THEN 0 ELSE 1 END
+            """,
+            self.MIN_THREAT_SCORE,
+            cutoff,
+            self.ARTICLE_SCAN_LIMIT,
         )
 
-        for row in congested:
-            severity = "critical" if row["congestion_pct"] > 90 else "high"
-            signal_data = {
-                "title": f"Port congestion: {row['port_name']}",
-                "description": f"{row['port_name']} at {row['congestion_pct']:.0f}% capacity with {row['waiting_vessels']} vessels waiting (avg {row['avg_wait_hours']:.1f}h)",
-                "source": self.source_name,
-                "severity": severity,
-                "risk_dimension": "operational",
-                "affected_regions": [row["country"]],
-                "confidence": 0.85,
-            }
-            created = await detector.ingest_signal(signal_data)
-            signals.append(created)
+        detector = SignalDetector(self._pool)
+        per_article_count: dict[int, int] = {}
+        created = 0
 
-        return signals
+        for r in rows:
+            article_id = r["article_id"]
+            if per_article_count.get(article_id, 0) >= self.MAX_ENTITIES_PER_ARTICLE:
+                continue
+            per_article_count[article_id] = per_article_count.get(article_id, 0) + 1
+
+            severity = self._severity_from_threat_score(r["threat_score"])
+            dimension = self.TOPIC_TO_DIMENSION.get(r["topic"], "operational")
+            context = _ensure_dict(r["context"])
+            regions = [str(x) for x in (context.get("countries_mentioned") or [])][:10]
+            commodities = [str(x) for x in (context.get("commodities_mentioned") or [])][:10]
+
+            description = (r["summary"] or (r["content"] or "")[:280]).strip()
+            if not description:
+                description = f"Elevated threat signal detected involving {r['energy_asset_name']}."
+
+            try:
+                await detector.ingest_signal({
+                    "title": r["title"] or f"Disruption risk: {r['energy_asset_name']}",
+                    "description": description,
+                    "source": f"article:{article_id}",
+                    "severity": severity,
+                    "risk_dimension": dimension,
+                    "affected_entity_type": r["energy_asset_type"],
+                    "affected_entity_uuid": str(r["energy_asset_uuid"]),
+                    "affected_commodities": commodities,
+                    "affected_regions": regions,
+                    "confidence": float(r["confidence"] or 0.7),
+                    "evidence_urls": [r["url"]] if r["url"] else [],
+                    "ttl_hours": self.SIGNAL_TTL_HOURS,
+                })
+                created += 1
+            except Exception as exc:
+                logger.warning("article_signal_ingest_failed", article_id=article_id, error=str(exc))
+
+        logger.info("article_signal_ingest_complete", created=created, scanned_articles=len(per_article_count))
+        return created
+
+    @staticmethod
+    def _severity_from_threat_score(threat_score: float | None) -> str:
+        score = float(threat_score or 0)
+        if score >= 75:
+            return "critical"
+        if score >= 55:
+            return "high"
+        if score >= 40:
+            return "elevated"
+        if score >= 20:
+            return "moderate"
+        return "low"
+
+    async def detect_signals(self, detector: SignalDetector) -> list[dict]:
+        raise NotImplementedError("Signals are created directly by ingest() -- there is no separate detection pass")

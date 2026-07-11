@@ -29,6 +29,29 @@ def _ensure_dict(val: Any) -> dict:
     return val if hasattr(val, "get") else {}
 
 
+def _ensure_list(val: Any) -> list:
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+    return []
+
+
+def normalize_executive_card(card: dict) -> dict:
+    """asyncpg doesn't auto-decode jsonb columns to Python objects on this
+    pool (no codec registered), so executive_recommendations' jsonb columns
+    come back as raw JSON strings unless explicitly parsed here."""
+    card["financial_impact"] = _ensure_dict(card.get("financial_impact"))
+    card["operational_impact"] = _ensure_dict(card.get("operational_impact"))
+    card["recommended_actions"] = _ensure_list(card.get("recommended_actions"))
+    card["supporting_data"] = _ensure_dict(card.get("supporting_data"))
+    return card
+
+
 class ProcurementOrchestrator:
     """End-to-end procurement orchestration — from disruption signals to executable recommendations."""
 
@@ -454,7 +477,7 @@ class ProcurementOrchestrator:
         return {
             "run": dict(run),
             "recommendations": [dict(r) for r in recs],
-            "executive_cards": [dict(r) for r in exec_cards],
+            "executive_cards": [normalize_executive_card(dict(r)) for r in exec_cards],
             "assumptions": [dict(r) for r in assumptions],
         }
 
@@ -487,7 +510,7 @@ class ProcurementOrchestrator:
 
         return {
             "run": dict(run),
-            "executive_cards": [dict(c) for c in cards],
+            "executive_cards": [normalize_executive_card(dict(c)) for c in cards],
         }
 
     async def ack_card(self, card_uuid: str, acknowledged_by: str = "user") -> bool:

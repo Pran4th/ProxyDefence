@@ -200,7 +200,7 @@ export default function Simulations() {
             <Card>
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2">
-                  <Network className="h-4 w-4 text-blue-500" />
+                  <Network className="h-4 w-4 text-primary" />
                   <span className="text-xs text-muted-foreground">Network</span>
                 </div>
                 <p className="text-2xl font-bold mt-1">{health.nodes}</p>
@@ -210,7 +210,7 @@ export default function Simulations() {
             <Card>
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2">
-                  <Play className="h-4 w-4 text-green-500" />
+                  <Play className="h-4 w-4 text-success" />
                   <span className="text-xs text-muted-foreground">Simulations</span>
                 </div>
                 <p className="text-2xl font-bold mt-1">{health.simulation_runs}</p>
@@ -220,7 +220,7 @@ export default function Simulations() {
             <Card>
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-amber-500" />
+                  <Shield className="h-4 w-4 text-warning" />
                   <span className="text-xs text-muted-foreground">Scenarios</span>
                 </div>
                 <p className="text-2xl font-bold mt-1">{health.scenario_templates}</p>
@@ -230,7 +230,7 @@ export default function Simulations() {
             <Card>
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-purple-500" />
+                  <Activity className="h-4 w-4 text-accent" />
                   <span className="text-xs text-muted-foreground">Status</span>
                 </div>
                 <p className="text-2xl font-bold mt-1 text-green-600">Operational</p>
@@ -258,7 +258,7 @@ export default function Simulations() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Play className="h-5 w-5 text-green-500" />
+                  <Play className="h-5 w-5 text-success" />
                   Run Simulation
                 </CardTitle>
                 <CardDescription>
@@ -370,9 +370,14 @@ export default function Simulations() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  <AlertTriangle className="h-5 w-5 text-warning" />
                   Recommendations
                 </CardTitle>
+                {recs.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Preliminary suggestions from simulation results — not a cost-optimized ranking.
+                  </p>
+                )}
               </CardHeader>
               <CardContent>
                 {recs.length === 0 ? (
@@ -518,8 +523,8 @@ export default function Simulations() {
                           <Area
                             type="monotone"
                             dataKey="supply_gap_bpd"
-                            stroke="#ef4444"
-                            fill="#ef4444"
+                            stroke="hsl(var(--destructive))"
+                            fill="hsl(var(--destructive))"
                             fillOpacity={0.2}
                             name="Supply Gap (bpd)"
                           />
@@ -547,14 +552,14 @@ export default function Simulations() {
                           <Line
                             type="monotone"
                             dataKey="total_inventory_barrels"
-                            stroke="#3b82f6"
+                            stroke="hsl(var(--primary))"
                             name="Inventory (barrels)"
                             strokeWidth={2}
                           />
                           <Line
                             type="monotone"
                             dataKey="total_flow_bpd"
-                            stroke="#10b981"
+                            stroke="hsl(var(--success))"
                             name="Flow (bpd)"
                             strokeWidth={2}
                           />
@@ -663,10 +668,10 @@ export default function Simulations() {
                                   <span
                                     className={
                                       (f.utilization_pct || 0) > 80
-                                        ? "text-red-500"
+                                        ? "text-destructive"
                                         : (f.utilization_pct || 0) > 60
-                                        ? "text-amber-500"
-                                        : "text-green-500"
+                                        ? "text-warning"
+                                        : "text-success"
                                     }
                                   >
                                     {(f.utilization_pct || 0).toFixed(0)}%
@@ -754,7 +759,7 @@ export default function Simulations() {
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm">
                           <span>Supply Gap</span>
-                          <span className="font-bold text-red-500">
+                          <span className="font-bold text-destructive">
                             {formatBPD(impacts.supply_gap_bpd)} bpd
                           </span>
                         </div>
@@ -770,7 +775,7 @@ export default function Simulations() {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span>Refinery Capacity Lost</span>
-                          <span className="font-bold text-red-500">
+                          <span className="font-bold text-destructive">
                             {formatBPD(impacts.total_refinery_capacity_lost_bpd || 0)} bpd
                           </span>
                         </div>
@@ -786,13 +791,13 @@ export default function Simulations() {
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm">
                           <span>Total Economic Loss</span>
-                          <span className="font-bold text-red-500">
+                          <span className="font-bold text-destructive">
                             {formatCurrency(impacts.economic_impact_usd)}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span>GDP Impact</span>
-                          <span className="font-bold text-red-500">
+                          <span className="font-bold text-destructive">
                             {impacts.gdp_impact_pct?.toFixed(3)}%
                           </span>
                         </div>
@@ -826,7 +831,7 @@ export default function Simulations() {
                           <Legend />
                           <Bar
                             dataKey="supply_gap_bpd"
-                            fill="#ef4444"
+                            fill="hsl(var(--destructive))"
                             name="Supply Gap (bpd)"
                             opacity={0.8}
                           />

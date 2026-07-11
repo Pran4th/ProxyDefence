@@ -5,13 +5,22 @@ import Navbar from "@/components/Navbar";
 import NewsCard from "@/components/NewsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { fetchArticles, searchArticles, type Article } from "@/lib/api";
+import { fetchArticles, fetchPublicArticles, searchArticles, type Article, type PublicArticleSummary } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+
+/** Minimal shape both Article (authenticated) and PublicArticleSummary
+ * (anonymous) satisfy, so the feed renders identically either way. */
+type NewsItem = Pick<
+  Article,
+  "id" | "title" | "source" | "topic" | "threat_score" | "risk_level" | "sentiment" | "published_at"
+> & { summary?: string; content?: string };
 
 const News = () => {
+  const { token } = useAuth();
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
   const [topicFilter, setTopicFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [newsItems, setNewsItems] = useState<Article[]>([]);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +30,9 @@ const News = () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchArticles({ limit: 40 });
+        const data: NewsItem[] = token
+          ? await fetchArticles({ limit: 40 })
+          : await fetchPublicArticles({ limit: 40 });
         setNewsItems(data);
       } catch (loadError) {
         console.error("Failed to fetch news:", loadError);
@@ -32,9 +43,9 @@ const News = () => {
     };
 
     void loadNews();
-  }, []);
+  }, [token]);
 
-  const getSeverity = (article: Article): "low" | "medium" | "high" | "critical" => {
+  const getSeverity = (article: NewsItem): "low" | "medium" | "high" | "critical" => {
     if (article.risk_level === "critical") return "critical";
     if (article.risk_level === "high") return "high";
     if (article.sentiment?.toLowerCase() === "positive") return "low";
@@ -65,8 +76,18 @@ const News = () => {
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
-      const data = await fetchArticles({ limit: 40 });
+      const data: NewsItem[] = token
+        ? await fetchArticles({ limit: 40 })
+        : await fetchPublicArticles({ limit: 40 });
       setNewsItems(data);
+      return;
+    }
+
+    // Semantic search hits an authenticated endpoint — anonymous visitors
+    // can't reach it, and the search box is disabled for them below, but
+    // guard here too in case this ever gets called some other way.
+    if (!token) {
+      setError("Sign in to search the full article archive.");
       return;
     }
 
@@ -100,24 +121,36 @@ const News = () => {
 
           <div className="mb-8 rounded-[1.5rem] border border-border bg-card p-5 shadow-elevation">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex flex-1 items-center gap-3">
-                <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        void handleSearch();
-                      }
-                    }}
-                    className="pl-10"
-                    placeholder="Search articles, actors, or topics"
-                  />
+              <div className="flex flex-1 flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          void handleSearch();
+                        }
+                      }}
+                      className="pl-10"
+                      placeholder={token ? "Search articles, actors, or topics" : "Sign in to search the archive"}
+                      disabled={!token}
+                    />
+                  </div>
+                  <Button onClick={() => void handleSearch()} disabled={searching || !token}>
+                    {searching ? "Searching..." : "Search"}
+                  </Button>
                 </div>
-                <Button onClick={() => void handleSearch()} disabled={searching}>
-                  {searching ? "Searching..." : "Search"}
-                </Button>
+                {!token && (
+                  <p className="text-xs text-muted-foreground">
+                    Browsing the public feed —{" "}
+                    <a href="/auth" className="underline underline-offset-2">
+                      sign in
+                    </a>{" "}
+                    to search the full archive.
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldAlert className="h-4 w-4 text-primary" />
@@ -198,7 +231,8 @@ const News = () => {
                   description={news.summary || news.content}
                   timestamp={new Date(news.published_at).toLocaleString()}
                   severity={getSeverity(news)}
-                  source={`${news.source} · ${news.topic || "general"} · threat ${Math.round(news.threat_score || 0)}`}
+                  source={`${news.source} · ${news.topic || "general"}`}
+                  threatScore={news.threat_score}
                   articleId={news.id}
                 />
               ))

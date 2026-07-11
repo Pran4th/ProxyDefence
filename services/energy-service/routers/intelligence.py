@@ -13,10 +13,8 @@ from filters import FilterParams
 from models import ASSET_TYPE_BY_TABLE
 from backend.shared.logging_config import get_logger
 from services.risk_engine import (
-    AISIngestor,
-    CommodityPriceIngestor,
+    ArticleSignalIngestor,
     RiskScoringEngine,
-    SanctionsIngestor,
     SignalDetector,
 )
 
@@ -216,60 +214,76 @@ async def list_risk_factors(
 
 
 # ── Data ingestion (admin) ──────────────────────────────────────────────────
+#
+# CommodityPriceIngestor/SanctionsIngestor/AISIngestor previously generated
+# fabricated data (hash-jittered "prices", a hardcoded sanctions snapshot, a
+# hash-jittered "AIS" feed) and fed it into the live risk-scoring pipeline as
+# if it were real intelligence. None of the three has a ready-made live data
+# source with a compatible shape to swap in within this pass: AIS data from
+# ml-platform's scripts/ingest_aisstream.py lands in a flat file, not a
+# queryable table; the live crude-price-api dataset covers only Brent (one of
+# ten benchmarks this ingestor claimed to cover); and the OFAC/EU/OpenSanctions
+# catalog is individual/entity-level, not the country-program shape
+# energy.sanctions expects. Rather than ship a fragile partial integration
+# under time pressure, these endpoints stay disabled until a real source is
+# wired per-commodity/per-country -- serving fabricated data as if real is
+# worse than serving nothing.
+#
+# ArticleSignalIngestor (news-signals) is the one real source: it derives
+# disruption_signals directly from the live news pipeline's own ML output
+# (real threat scores, real energy-entity matches), already running as a
+# background task on a timer (see app.py). This endpoint exists for a manual
+# trigger/visibility into that same real pathway, not a separate source.
 
 
 @router.post("/ingest/commodity-prices")
-async def trigger_commodity_ingest(
-    pool: asyncpg.Pool = Depends(get_pool),
-) -> dict[str, Any]:
-    ingestor = CommodityPriceIngestor(pool)
-    count = await ingestor.ingest()
-    signals = await ingestor.detect_signals(SignalDetector(pool))
-    return {"ingested": count, "signals_generated": len(signals)}
+async def trigger_commodity_ingest() -> None:
+    raise HTTPException(
+        status_code=501,
+        detail="Not wired to a live commodity price source yet. This previously generated "
+               "simulated data and has been disabled rather than continue serving fake prices.",
+    )
 
 
 @router.post("/ingest/sanctions")
-async def trigger_sanctions_ingest(
-    pool: asyncpg.Pool = Depends(get_pool),
-) -> dict[str, Any]:
-    ingestor = SanctionsIngestor(pool)
-    count = await ingestor.ingest()
-    signals = await ingestor.detect_signals(SignalDetector(pool))
-    return {"ingested": count, "signals_generated": len(signals)}
+async def trigger_sanctions_ingest() -> None:
+    raise HTTPException(
+        status_code=501,
+        detail="Not wired to a live sanctions source yet. This previously served a hardcoded "
+               "10-country snapshot and has been disabled rather than continue serving stale data.",
+    )
 
 
 @router.post("/ingest/ais")
-async def trigger_ais_ingest(
+async def trigger_ais_ingest() -> None:
+    raise HTTPException(
+        status_code=501,
+        detail="Not wired to a live AIS source yet. This previously generated simulated vessel/"
+               "congestion data and has been disabled rather than continue serving fake positions.",
+    )
+
+
+@router.post("/ingest/news-signals")
+async def trigger_news_signal_ingest(
     pool: asyncpg.Pool = Depends(get_pool),
 ) -> dict[str, Any]:
-    ingestor = AISIngestor(pool)
-    count = await ingestor.ingest()
-    signals = await ingestor.detect_signals(SignalDetector(pool))
-    return {"ingested": count, "signals_generated": len(signals)}
+    ingestor = ArticleSignalIngestor(pool)
+    created = await ingestor.ingest()
+    return {"source": "news_signals", "signals_created": created}
 
 
 @router.post("/ingest/all")
 async def trigger_all_ingestors(
     pool: asyncpg.Pool = Depends(get_pool),
 ) -> dict[str, Any]:
-    results = {}
-
-    ingestor1 = CommodityPriceIngestor(pool)
-    c1 = await ingestor1.ingest()
-    s1 = await ingestor1.detect_signals(SignalDetector(pool))
-    results["commodity_prices"] = {"ingested": c1, "signals_generated": len(s1)}
-
-    ingestor2 = SanctionsIngestor(pool)
-    c2 = await ingestor2.ingest()
-    s2 = await ingestor2.detect_signals(SignalDetector(pool))
-    results["sanctions"] = {"ingested": c2, "signals_generated": len(s2)}
-
-    ingestor3 = AISIngestor(pool)
-    c3 = await ingestor3.ingest()
-    s3 = await ingestor3.detect_signals(SignalDetector(pool))
-    results["ais"] = {"ingested": c3, "signals_generated": len(s3)}
-
-    return results
+    ingestor = ArticleSignalIngestor(pool)
+    created = await ingestor.ingest()
+    return {
+        "news_signals": {"signals_created": created},
+        "commodity_prices": "not wired to a live source -- see /ingest/commodity-prices",
+        "sanctions": "not wired to a live source -- see /ingest/sanctions",
+        "ais": "not wired to a live source -- see /ingest/ais",
+    }
 
 
 # ── Commodity prices view ───────────────────────────────────────────────────

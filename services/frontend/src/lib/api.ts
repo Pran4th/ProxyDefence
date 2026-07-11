@@ -123,6 +123,8 @@ export interface AuthUser {
   email: string;
   username: string;
   role: string;
+  organization?: string | null;
+  location?: string | null;
   created_at: string;
 }
 export interface Event {
@@ -417,6 +419,22 @@ export const getCurrentUser = async () => {
   return response.data;
 };
 
+export interface SystemStatus {
+  status: "healthy" | "unhealthy" | "degraded";
+  [key: string]: unknown;
+}
+
+/** Real Postgres/Elasticsearch/Kafka health, not a hardcoded "ACTIVE" label. */
+export const fetchSystemStatus = async () => {
+  const response = await api.get<SystemStatus>("/status");
+  return response.data;
+};
+
+export const updateProfile = async (params: { organization?: string | null; location?: string | null }) => {
+  const response = await api.patch<AuthUser>("/auth/me", params);
+  return response.data;
+};
+
 export const fetchArticles = async (params?: {
   limit?: number;
   offset?: number;
@@ -464,6 +482,35 @@ export interface PublicPreview {
 /** Unauthenticated preview data for the landing page — works before sign-in. */
 export const fetchPublicPreview = async () => {
   const response = await api.get<PublicPreview>("/public/preview");
+  return response.data;
+};
+
+export interface PublicArticleSummary {
+  id: number;
+  title: string;
+  source: string;
+  topic?: string;
+  summary?: string;
+  risk_level?: Article["risk_level"];
+  threat_score?: number;
+  sentiment?: Article["sentiment"];
+  published_at: string;
+}
+
+/** Unauthenticated, paginated article list — powers the intel feed for anonymous visitors. */
+export const fetchPublicArticles = async (params?: {
+  limit?: number;
+  offset?: number;
+  sentiment?: string;
+  topic?: string;
+  risk_level?: string;
+}) => {
+  const response = await api.get<PublicArticleSummary[]>("/public/articles", { params });
+  return response.data;
+};
+
+export const fetchPublicArticle = async (id: number) => {
+  const response = await api.get<PublicArticleSummary>(`/public/articles/${id}`);
   return response.data;
 };
 

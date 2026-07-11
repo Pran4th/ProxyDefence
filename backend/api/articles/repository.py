@@ -2,10 +2,25 @@ from typing import Any
 
 ALLOWED_FILTERS = {"sentiment", "topic", "risk_level"}
 
+PUBLIC_ARTICLE_COLUMNS = (
+    "id, title, source, topic, summary, risk_level, threat_score, sentiment, published_at"
+)
+
 
 class ArticleRepository:
     def __init__(self, pool) -> None:
         self.pool = pool
+
+    @staticmethod
+    def _build_where(filters: dict[str, str | None]) -> tuple[str, list[Any]]:
+        conditions = []
+        params: list[Any] = []
+        for col, val in filters.items():
+            if val is not None and col in ALLOWED_FILTERS:
+                params.append(val)
+                conditions.append(f"{col} = ${len(params)}")
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+        return where_clause, params
 
     async def list_articles(
         self,
@@ -15,21 +30,10 @@ class ArticleRepository:
         topic: str | None = None,
         risk_level: str | None = None,
     ) -> list[dict[str, Any]]:
-        filters = {"sentiment": sentiment, "topic": topic, "risk_level": risk_level}
-        conditions = []
-        params = []
-
-        for col, val in filters.items():
-            if val is not None and col in ALLOWED_FILTERS:
-                params.append(val)
-                conditions.append(f"{col} = ${len(params)}")
-
+        where_clause, params = self._build_where(
+            {"sentiment": sentiment, "topic": topic, "risk_level": risk_level}
+        )
         params.extend([limit, offset])
-
-        if conditions:
-            where_clause = "WHERE " + " AND ".join(conditions)
-        else:
-            where_clause = ""
 
         async with self.pool.acquire() as conn:
             articles = await conn.fetch(
@@ -46,6 +50,47 @@ class ArticleRepository:
             )
 
         return [dict(article) for article in articles]
+
+    async def list_public_articles(
+        self,
+        limit: int,
+        offset: int,
+        sentiment: str | None = None,
+        topic: str | None = None,
+        risk_level: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Same filter/pagination shape as list_articles, but the SELECT is an
+        explicit narrow column allowlist (no content/url/confidence) so a
+        future edit to list_articles can't leak sensitive fields through the
+        unauthenticated /public/articles surface."""
+        where_clause, params = self._build_where(
+            {"sentiment": sentiment, "topic": topic, "risk_level": risk_level}
+        )
+        params.extend([limit, offset])
+
+        async with self.pool.acquire() as conn:
+            articles = await conn.fetch(
+                f"""
+                SELECT {PUBLIC_ARTICLE_COLUMNS}
+                FROM processed_articles
+                {where_clause}
+                ORDER BY published_at DESC NULLS LAST,
+                         created_at DESC
+                LIMIT ${len(params) - 1}
+                OFFSET ${len(params)}
+                """,
+                *params,
+            )
+
+        return [dict(article) for article in articles]
+
+    async def get_public_article(self, article_id: int) -> dict[str, Any] | None:
+        async with self.pool.acquire() as conn:
+            article = await conn.fetchrow(
+                f"SELECT {PUBLIC_ARTICLE_COLUMNS} FROM processed_articles WHERE id = $1",
+                article_id,
+            )
+        return dict(article) if article else None
 
     async def get_article(self, article_id: int) -> dict[str, Any] | None:
         async with self.pool.acquire() as conn:

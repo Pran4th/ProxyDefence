@@ -1,12 +1,14 @@
-"""Unauthenticated preview data for the marketing/landing pages. Deliberately
-minimal (a handful of safe, already-public article fields + aggregate stats)
-so anonymous visitors see real platform output before signing in, without
-exposing the full authenticated data model.
+"""Unauthenticated preview data for the marketing/landing pages, plus a real
+public articles list/detail surface for anonymous visitors browsing the
+intel feed. Both use narrow, explicit column allowlists (never SELECT *)
+so anonymous access can never leak content/url/confidence or other
+authenticated-only fields.
 """
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
+from backend.api.articles.repository import ArticleRepository
 from backend.api_service.rate_limit import limiter
 
 router = APIRouter(prefix="/public", tags=["Public Preview"])
@@ -47,3 +49,29 @@ async def get_public_preview(request: Request) -> dict[str, Any]:
             "datasets": datasets or 0,
         },
     }
+
+
+@router.get("/articles")
+@limiter.limit("30/minute")
+async def list_public_articles(
+    request: Request,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    sentiment: str | None = Query(None),
+    topic: str | None = Query(None),
+    risk_level: str | None = Query(None),
+) -> list[dict[str, Any]]:
+    repo = ArticleRepository(request.app.state.pg_pool)
+    return await repo.list_public_articles(
+        limit=limit, offset=offset, sentiment=sentiment, topic=topic, risk_level=risk_level,
+    )
+
+
+@router.get("/articles/{article_id}")
+@limiter.limit("30/minute")
+async def get_public_article(request: Request, article_id: int) -> dict[str, Any]:
+    repo = ArticleRepository(request.app.state.pg_pool)
+    article = await repo.get_public_article(article_id)
+    if article is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return article

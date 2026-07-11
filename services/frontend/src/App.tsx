@@ -97,11 +97,7 @@ const App = () => (
                 />
                 <Route
                   path="/article/:id"
-                  element={(
-                    <ProtectedRoute>
-                      <ArticleDetail />
-                    </ProtectedRoute>
-                  )}
+                  element={<ArticleDetail />}
                 />
                 <Route
                   path="/energy/map"

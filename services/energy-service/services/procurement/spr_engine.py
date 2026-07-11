@@ -27,6 +27,21 @@ def _ensure_dict(val: Any) -> dict:
     return val if hasattr(val, "get") else {}
 
 
+def _ensure_list(val: Any) -> list:
+    """asyncpg doesn't auto-decode jsonb columns to Python objects (no codec
+    registered on this pool), so a jsonb array column comes back as a raw
+    JSON string unless explicitly parsed here."""
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+    return []
+
+
 class SPREngine:
     """Strategic Petroleum Reserve Decision Engine — release optimization, refill, policy, timeline."""
 
@@ -309,7 +324,7 @@ class SPREngine:
         economic_savings = total_drawdown_volume * 15.0  # SPR oil cheaper than spot
 
         # ── Facility selection and release plan
-        release_plan = await self._optimize_release_plan(
+        release_plan = self._optimize_release_plan(
             facilities, releasable_inventory, supply_gap_bpd,
             max_drawdown_days, strategy, policy,
         )
@@ -785,8 +800,8 @@ class SPREngine:
             return None
         result = dict(row)
         result["results"] = _ensure_dict(result.get("results"))
-        result["recommendations"] = result.get("recommendations") or []
-        result["decision_timeline"] = result.get("decision_timeline") or []
+        result["recommendations"] = _ensure_list(result.get("recommendations"))
+        result["decision_timeline"] = _ensure_list(result.get("decision_timeline"))
 
         plans = await self.pool.fetch(
             "SELECT * FROM energy.spr_release_plans WHERE release_run_uuid = $1::uuid ORDER BY facility_uuid",

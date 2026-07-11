@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Network, RefreshCw, Search, ZoomIn, ZoomOut, Zap } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import CytoscapeComponent from "react-cytoscapejs";
 
 import AppShell from "@/components/AppShell";
@@ -29,10 +29,10 @@ type GraphPayload = {
 };
 
 const GraphExplorer = () => {
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const cyRef = useRef<any>(null);
   const [graph, setGraph] = useState<GraphPayload>({ nodes: [], edges: [] });
-  const [entity, setEntity] = useState("");
+  const [entity, setEntity] = useState(() => searchParams.get("entity") ?? "");
   const [activeEntity, setActiveEntity] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +102,15 @@ const GraphExplorer = () => {
   };
 
   useEffect(() => {
-    loadNetwork();
+    const linkedEntity = searchParams.get("entity");
+    if (linkedEntity) {
+      loadEntityGraph(linkedEntity);
+    } else {
+      loadNetwork();
+    }
+    // Only meant to run once on mount against whatever ?entity= was present
+    // when the page loaded -- not on every searchParams identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const graphElements = useMemo(() => {
@@ -261,7 +269,8 @@ const GraphExplorer = () => {
                 cy.removeAllListeners();
                 cy.on("tap", "node", (event) => {
                   const nodeId = event.target.id();
-                  navigate(`/entities/${encodeURIComponent(nodeId)}`);
+                  setEntity(nodeId);
+                  loadEntityGraph(nodeId);
                 });
               }}
                 stylesheet={[

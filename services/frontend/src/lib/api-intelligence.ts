@@ -86,26 +86,6 @@ export async function fetchScenario(uuid: string): Promise<ScenarioAssumption> {
   return data;
 }
 
-export async function triggerCommodityIngest(): Promise<{ ingested: number; signals_generated: number }> {
-  const { data } = await api.post(`${BASE}/ingest/commodity-prices`);
-  return data;
-}
-
-export async function triggerSanctionsIngest(): Promise<{ ingested: number; signals_generated: number }> {
-  const { data } = await api.post(`${BASE}/ingest/sanctions`);
-  return data;
-}
-
-export async function triggerAISIngest(): Promise<{ ingested: number; signals_generated: number }> {
-  const { data } = await api.post(`${BASE}/ingest/ais`);
-  return data;
-}
-
-export async function triggerAllIngestors(): Promise<Record<string, { ingested: number; signals_generated: number }>> {
-  const { data } = await api.post(`${BASE}/ingest/all`);
-  return data;
-}
-
 export async function fetchCommodityPrices(params?: {
   limit?: number;
   offset?: number;

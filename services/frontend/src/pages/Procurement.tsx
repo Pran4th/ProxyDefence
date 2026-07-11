@@ -554,7 +554,7 @@ export default function Procurement() {
                     key={card.uuid}
                     className={
                       card.severity === "critical" ? "border-destructive/50" :
-                      card.severity === "warning" ? "border-yellow-500/50" : ""
+                      card.severity === "warning" ? "border-warning/50" : ""
                     }
                   >
                     <CardHeader>
@@ -563,7 +563,7 @@ export default function Procurement() {
                           {card.severity === "critical" ? (
                             <AlertTriangle className="h-5 w-5 text-destructive" />
                           ) : card.severity === "warning" ? (
-                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                            <AlertTriangle className="h-5 w-5 text-warning" />
                           ) : (
                             <BarChart3 className="h-5 w-5 text-primary" />
                           )}
@@ -585,7 +585,7 @@ export default function Procurement() {
                             </Button>
                           )}
                           {card.is_acknowledged && (
-                            <Badge variant="default" className="bg-green-600">
+                            <Badge variant="default" className="bg-success text-success-foreground">
                               <CheckCircle className="mr-1 h-3 w-3" /> Acknowledged
                             </Badge>
                           )}

@@ -7,6 +7,8 @@ export interface AuthUser {
   email: string;
   username: string;
   role: string;
+  organization?: string | null;
+  location?: string | null;
   created_at: string;
 }
 
@@ -17,6 +19,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, username: string, password: string) => Promise<void>;
   logout: () => void;
+  setUser: (user: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -67,6 +70,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(nextUser);
   };
 
+  const updateUser = (nextUser: AuthUser) => {
+    localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+    setUser(nextUser);
+  };
+
   const login = async (email: string, password: string) => {
     const response = await loginUser({ email, password });
     persistAuth(response.access_token, response.user);
@@ -86,7 +94,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const value = useMemo(
-    () => ({ user, token, loading, login, register, logout }),
+    () => ({ user, token, loading, login, register, logout, setUser: updateUser }),
     [loading, token, user],
   );
 

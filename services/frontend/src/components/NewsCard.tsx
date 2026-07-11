@@ -1,6 +1,7 @@
 import { Clock, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ThreatBadge } from "@/lib/riskFormat";
 
 interface NewsCardProps {
   title: string;
@@ -8,6 +9,7 @@ interface NewsCardProps {
   timestamp: string;
   severity?: "low" | "medium" | "high" | "critical";
   source?: string;
+  threatScore?: number;
   articleId?: number;
 }
 
@@ -17,6 +19,7 @@ const NewsCard = ({
   timestamp,
   severity = "medium",
   source = "ProxyDefence Intel",
+  threatScore,
   articleId,
 }: NewsCardProps) => {
   const severityStyles = {
@@ -39,6 +42,7 @@ const NewsCard = ({
             {severity}
           </span>
           <span className="text-xs text-muted-foreground">{source}</span>
+          {threatScore !== undefined && <ThreatBadge score={threatScore} />}
         </div>
         <h3 className="text-lg font-semibold mb-2 group-hover:text-primary transition-colors">
           {title}

@@ -36,17 +36,13 @@ import {
 } from "recharts";
 import {
   Droplets,
-  AlertTriangle,
   BarChart3,
   DollarSign,
-  Globe,
   RefreshCw,
   Clock,
   Shield,
   TrendingUp,
   CheckCircle,
-  Zap,
-  FileText,
   Play,
   Gauge,
   Warehouse,
@@ -161,6 +157,7 @@ export default function SPR() {
 
   const health = healthQuery.data;
   const facilities = facilitiesQuery.data?.items || [];
+  const activeFacilityCount = facilities.filter((f: any) => f.operational_status === "active").length;
   const policies = policiesQuery.data?.items || [];
   const runs = runsQuery.data?.items || [];
   const runDetail = runDetailQuery.data;
@@ -194,9 +191,9 @@ export default function SPR() {
                 <Warehouse className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{health?.facilities ?? "-"}</div>
+                <div className="text-2xl font-bold">{health?.spr_facilities ?? "-"}</div>
                 <p className="text-xs text-muted-foreground">
-                  Active: {health?.active_facilities ?? "-"}
+                  Active: {activeFacilityCount}
                 </p>
               </CardContent>
             </Card>
@@ -206,7 +203,7 @@ export default function SPR() {
                 <Gauge className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{health?.total_capacity_mb ? `${health.total_capacity_mb.toFixed(1)}M` : "-"}</div>
+                <div className="text-2xl font-bold">{health?.total_capacity_barrels ? `${(health.total_capacity_barrels / 1e6).toFixed(1)}M` : "-"}</div>
                 <p className="text-xs text-muted-foreground">barrels</p>
               </CardContent>
             </Card>
@@ -216,9 +213,9 @@ export default function SPR() {
                 <Droplets className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{health?.current_inventory_mb ? `${health.current_inventory_mb.toFixed(1)}M` : "-"}</div>
+                <div className="text-2xl font-bold">{health?.total_inventory_barrels ? `${(health.total_inventory_barrels / 1e6).toFixed(1)}M` : "-"}</div>
                 <p className="text-xs text-muted-foreground">
-                  {health?.utilization_pct ? `${(health.utilization_pct * 100).toFixed(1)}% utilized` : ""}
+                  {health?.overall_fill_pct !== undefined ? `${health.overall_fill_pct.toFixed(1)}% utilized` : ""}
                 </p>
               </CardContent>
             </Card>
@@ -228,7 +225,7 @@ export default function SPR() {
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{health?.release_runs ?? "-"}</div>
+                <div className="text-2xl font-bold">{health?.optimization_runs ?? "-"}</div>
                 <p className="text-xs text-muted-foreground">
                   Latest: {health?.latest_run || "none"}
                 </p>
@@ -258,7 +255,7 @@ export default function SPR() {
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm capitalize">{p.name}</CardTitle>
                         <CardDescription>
-                          Reserve: {((p.min_reserve_threshold || 0) * 100).toFixed(0)}% | Daily: {(p.max_daily_release_rate || 0).toLocaleString()} bpd
+                          Reserve: {(p.min_reserve_threshold_pct || 0).toFixed(0)}% | Daily: {(p.max_daily_release_bpd || 0).toLocaleString()} bpd
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
@@ -271,12 +268,10 @@ export default function SPR() {
                             <span>Strategic preservation</span>
                             <span>{p.strategic_preservation ? "Yes" : "No"}</span>
                           </div>
-                          {p.duration_days && (
-                            <div className="flex justify-between">
-                              <span>Duration</span>
-                              <span>{p.duration_days} days</span>
-                            </div>
-                          )}
+                          <div className="flex justify-between">
+                            <span>Refill trigger</span>
+                            <span>{p.refill_trigger_pct ?? "-"}%</span>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -329,7 +324,7 @@ export default function SPR() {
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
                           <span className="text-muted-foreground">Capacity</span>
-                          <p className="font-medium">{(f.capacity_barrels || 0).toLocaleString()} bbl</p>
+                          <p className="font-medium">{(f.storage_capacity_barrels || 0).toLocaleString()} bbl</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Inventory</span>
@@ -341,7 +336,7 @@ export default function SPR() {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Utilization</span>
-                          <p className="font-medium">{f.capacity_barrels ? `${((f.current_inventory_barrels / f.capacity_barrels) * 100).toFixed(1)}%` : "-"}</p>
+                          <p className="font-medium">{f.fill_pct !== undefined ? `${f.fill_pct.toFixed(1)}%` : "-"}</p>
                         </div>
                       </div>
                       {f.criticality && (
@@ -442,29 +437,29 @@ export default function SPR() {
                     <div className="grid grid-cols-3 gap-4">
                       <div className="rounded-lg bg-muted p-3 text-center">
                         <p className="text-xs text-muted-foreground">National Demand</p>
-                        <p className="text-xl font-bold">{(demand.national_demand_bpd || 0).toLocaleString()}</p>
+                        <p className="text-xl font-bold">{(demand.total_national_demand_bpd || 0).toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground">bpd</p>
                       </div>
                       <div className="rounded-lg bg-muted p-3 text-center">
                         <p className="text-xs text-muted-foreground">Strategic Reserve</p>
-                        <p className="text-xl font-bold">{(demand.strategic_reserve_bpd || 0).toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">bpd</p>
+                        <p className="text-xl font-bold">{(demand.total_spr_inventory || 0).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">barrels</p>
                       </div>
                       <div className="rounded-lg bg-muted p-3 text-center">
                         <p className="text-xs text-muted-foreground">Coverage Days</p>
-                        <p className="text-xl font-bold">{demand.coverage_days ?? "-"}</p>
+                        <p className="text-xl font-bold">{demand.days_of_supply_remaining?.toFixed(0) ?? "-"}</p>
                         <p className="text-xs text-muted-foreground">days at current rate</p>
                       </div>
                     </div>
-                    {demand.regional_demand && demand.regional_demand.length > 0 && (
+                    {demand.regional_demands && demand.regional_demands.length > 0 && (
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={demand.regional_demand}>
+                          <BarChart data={demand.regional_demands}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="region" tick={{ fontSize: 11 }} />
                             <YAxis tick={{ fontSize: 11 }} />
                             <Tooltip />
-                            <Bar dataKey="demand_bpd" fill="hsl(var(--primary))" name="Demand (bpd)" />
+                            <Bar dataKey="daily_demand_bpd" fill="hsl(var(--primary))" name="Demand (bpd)" />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -535,64 +530,62 @@ export default function SPR() {
                 <CardTitle className="flex items-center gap-2">
                   <Route className="h-4 w-4" /> Decision Timeline
                 </CardTitle>
-                <CardDescription>Now → +24h → +72h → +7d → +30d</CardDescription>
+                <CardDescription>Immediate → Short-term → Medium-term → Long-term</CardDescription>
               </CardHeader>
               <CardContent>
-                {selectedRun && runDetail?.decision_timeline ? (
+                {selectedRun && runDetail?.timeline_entries && runDetail.timeline_entries.length > 0 ? (
                   <div className="space-y-6">
-                    <div className="grid grid-cols-5 gap-2">
-                      {["now", "24h", "72h", "7d", "30d"].map((phase) => {
-                        const entry = runDetail.decision_timeline?.[phase] || {};
-                        return (
-                          <Card key={phase} className={
-                            phase === "now" ? "border-destructive/50" :
-                            phase === "24h" ? "border-orange-500/50" :
-                            phase === "72h" ? "border-yellow-500/50" :
-                            phase === "7d" ? "border-blue-500/50" :
-                            "border-green-500/50"
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                      {[...runDetail.timeline_entries]
+                        .sort((a: any, b: any) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0))
+                        .map((entry: any) => (
+                          <Card key={entry.uuid} className={
+                            entry.phase === "immediate" ? "border-destructive/50" :
+                            entry.phase === "short_term" ? "border-warning/50" :
+                            entry.phase === "medium_term" ? "border-primary/50" :
+                            "border-success/50"
                           }>
                             <CardHeader className="p-2 pb-0">
                               <CardTitle className="text-[10px] uppercase tracking-wider">
-                                {phase === "now" ? "Now" : phase === "24h" ? "+24 Hours" : phase === "72h" ? "+72 Hours" : phase === "7d" ? "+7 Days" : "+30 Days"}
+                                {entry.timing_label || entry.phase}
                               </CardTitle>
                             </CardHeader>
-                            <CardContent className="p-2 text-[10px]">
-                              {entry.phase ? (
-                                <div className="space-y-1">
-                                  <p className="font-medium">{entry.phase}</p>
-                                  {entry.action && <p className="text-muted-foreground">{entry.action}</p>}
-                                  <p className="text-muted-foreground">
-                                    Daily: {(entry.daily_release_bpd || 0).toLocaleString()} bpd
-                                  </p>
-                                  <p className="text-muted-foreground">
-                                    Cumulative: {(entry.cumulative_release || 0).toLocaleString()} bbl
-                                  </p>
-                                  <p className="text-muted-foreground">
-                                    Remaining: {(entry.remaining_inventory || 0).toLocaleString()} bbl
-                                  </p>
-                                </div>
-                              ) : (
-                                <p className="text-muted-foreground">No data</p>
+                            <CardContent className="space-y-1 p-2 text-[10px]">
+                              <p className="font-medium">{entry.action}</p>
+                              {entry.details && <p className="text-muted-foreground">{entry.details}</p>}
+                              {entry.facility && (
+                                <p className="text-muted-foreground">Facility: {entry.facility}</p>
                               )}
+                              {entry.volume_barrels > 0 && (
+                                <p className="text-muted-foreground">
+                                  Volume: {entry.volume_barrels.toLocaleString()} bbl
+                                </p>
+                              )}
+                              <p className="text-muted-foreground">{entry.expected_impact}</p>
+                              <p className="text-muted-foreground">
+                                Confidence: {entry.confidence !== undefined ? `${(entry.confidence * 100).toFixed(0)}%` : "-"}
+                              </p>
                             </CardContent>
                           </Card>
-                        );
-                      })}
+                        ))}
                     </div>
 
-                    {runDetail.drawdown_plan && runDetail.drawdown_plan.length > 0 && (
+                    {runDetail.release_plans && runDetail.release_plans.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium mb-2">Drawdown Plan</h4>
+                        <h4 className="text-sm font-medium mb-2">Release Plan by Facility</h4>
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={runDetail.drawdown_plan}>
+                            <BarChart data={runDetail.release_plans.map((p: any) => ({
+                              facility: p.reason?.replace("Strategic release from ", "") || p.facility_uuid,
+                              volume: p.release_volume_barrels,
+                              cost: p.total_cost_usd,
+                            }))}>
                               <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                              <XAxis dataKey="facility" tick={{ fontSize: 10 }} />
                               <YAxis tick={{ fontSize: 11 }} />
                               <Tooltip />
-                              <Area type="monotone" dataKey="inventory_remaining" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" name="Inventory Remaining (bbl)" />
-                              <Line type="monotone" dataKey="daily_release" stroke="hsl(var(--destructive))" name="Daily Release (bpd)" />
-                            </AreaChart>
+                              <Bar dataKey="volume" fill="hsl(var(--primary))" name="Release Volume (bbl)" />
+                            </BarChart>
                           </ResponsiveContainer>
                         </div>
                       </div>
@@ -645,21 +638,21 @@ export default function SPR() {
                 <BarChart3 className="h-4 w-4" /> SPR Recommendations
               </h3>
 
-              {selectedRun && runDetail?.recommendations && runDetail.recommendations.length > 0 ? (
-                runDetail.recommendations.map((rec: any) => (
+              {selectedRun && runDetail?.recommendations_list && runDetail.recommendations_list.length > 0 ? (
+                runDetail.recommendations_list.map((rec: any) => (
                   <Card key={rec.uuid} className={
                     rec.severity === "critical" ? "border-destructive/50" :
-                    rec.severity === "warning" ? "border-yellow-500/50" : ""
+                    rec.severity === "warning" ? "border-warning/50" : ""
                   }>
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
-                          {rec.card_type === "release" ? (
-                            <Droplets className="h-5 w-5 text-blue-500" />
-                          ) : rec.card_type === "procurement" ? (
-                            <ShoppingCart className="h-5 w-5 text-amber-500" />
-                          ) : rec.card_type === "refill" ? (
-                            <RefreshCw className="h-5 w-5 text-green-500" />
+                          {rec.recommendation_type === "release" ? (
+                            <Droplets className="h-5 w-5 text-primary" />
+                          ) : rec.recommendation_type === "procurement" ? (
+                            <ShoppingCart className="h-5 w-5 text-warning" />
+                          ) : rec.recommendation_type === "refill" ? (
+                            <RefreshCw className="h-5 w-5 text-success" />
                           ) : (
                             <Shield className="h-5 w-5 text-primary" />
                           )}
@@ -670,82 +663,65 @@ export default function SPR() {
                             rec.severity === "critical" ? "destructive" :
                             rec.severity === "warning" ? "secondary" : "outline"
                           }>{rec.severity}</Badge>
-                          <Badge variant="outline">{rec.card_type}</Badge>
+                          <Badge variant="outline">{rec.recommendation_type}</Badge>
                           {!rec.is_acknowledged && (
                             <Button size="sm" variant="outline" onClick={() => ackMutation.mutate(rec.uuid)}>
                               <CheckCircle className="mr-1 h-3 w-3" /> Acknowledge
                             </Button>
                           )}
                           {rec.is_acknowledged && (
-                            <Badge variant="default" className="bg-green-600">
+                            <Badge variant="default" className="bg-success text-success-foreground">
                               <CheckCircle className="mr-1 h-3 w-3" /> Acknowledged
                             </Badge>
                           )}
                         </div>
                       </div>
                       <CardDescription>
-                        Impact: {(rec.impact_score || 0).toFixed(2)} | Urgency: {rec.urgency || "medium"}
+                        Confidence: {rec.confidence !== undefined ? `${(rec.confidence * 100).toFixed(0)}%` : "-"}
+                        {rec.expected_supply_extension_days ? ` | Extends supply by ${rec.expected_supply_extension_days} days` : ""}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <p className="text-sm">{rec.summary || rec.description}</p>
+                      <p className="text-sm">{rec.summary}</p>
 
-                      {rec.financial_impact && (
-                        <div className="rounded-lg bg-muted p-3">
-                          <p className="text-xs font-medium mb-1 flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" /> Financial Impact
-                          </p>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            {Object.entries(rec.financial_impact).map(([key, val]) => (
-                              <div key={key} className="flex justify-between">
-                                <span>{key.replace(/_/g, " ")}</span>
-                                <span>{typeof val === "number" ? `$${(val as number).toLocaleString()}` : String(val)}</span>
-                              </div>
-                            ))}
-                          </div>
+                      <div className="rounded-lg bg-muted p-3">
+                        <p className="mb-1 flex items-center gap-1 text-xs font-medium">
+                          <DollarSign className="h-3 w-3" /> Impact
+                        </p>
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          {rec.release_volume_barrels > 0 && (
+                            <div className="flex justify-between">
+                              <span>Volume</span>
+                              <span>{rec.release_volume_barrels.toLocaleString()} bbl</span>
+                            </div>
+                          )}
+                          {rec.primary_facility && (
+                            <div className="flex justify-between">
+                              <span>Primary facility</span>
+                              <span>{rec.primary_facility}</span>
+                            </div>
+                          )}
+                          {rec.economic_savings_usd > 0 && (
+                            <div className="flex justify-between">
+                              <span>Economic savings</span>
+                              <span>${rec.economic_savings_usd.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {rec.alternative_cost_delta > 0 && (
+                            <div className="flex justify-between">
+                              <span>Alternative cost delta</span>
+                              <span>${rec.alternative_cost_delta.toLocaleString()}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
 
-                      {rec.operational_impact && (
-                        <div className="rounded-lg bg-muted p-3">
-                          <p className="text-xs font-medium mb-1 flex items-center gap-1">
-                            <Zap className="h-3 w-3" /> Operational Impact
-                          </p>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            {Object.entries(rec.operational_impact).map(([key, val]) => (
-                              <div key={key} className="flex justify-between">
-                                <span>{key.replace(/_/g, " ")}</span>
-                                <span>{typeof val === "number" ? (val as number).toLocaleString() : String(val)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      {rec.reason && <p className="text-xs text-muted-foreground">{rec.reason}</p>}
 
-                      {rec.cost_analysis && (
-                        <div className="rounded-lg bg-muted p-3">
-                          <p className="text-xs font-medium mb-1 flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" /> Cost Analysis
-                          </p>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            {Object.entries(rec.cost_analysis).map(([key, val]) => (
-                              <div key={key} className="flex justify-between">
-                                <span>{key.replace(/_/g, " ")}</span>
-                                <span>{typeof val === "number" ? `$${(val as number).toLocaleString()}` : String(val)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {rec.recommended_actions && rec.recommended_actions.length > 0 && (
+                      {rec.alternative_strategy && (
                         <div>
-                          <p className="text-xs font-medium mb-1">Recommended Actions:</p>
-                          <ul className="list-disc pl-4 text-sm text-muted-foreground space-y-1">
-                            {rec.recommended_actions.map((a: string, i: number) => (
-                              <li key={i}>{a}</li>
-                            ))}
-                          </ul>
+                          <p className="mb-1 text-xs font-medium">Alternative Strategy:</p>
+                          <p className="text-sm text-muted-foreground">{rec.alternative_strategy}</p>
                         </div>
                       )}
                     </CardContent>

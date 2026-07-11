@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from db import get_pool
 from backend.shared.logging_config import get_logger
-from services.procurement.orchestrator import ProcurementOrchestrator
+from services.procurement.orchestrator import ProcurementOrchestrator, normalize_executive_card
 from services.procurement.compatibility import RefineryCompatibility
 from services.procurement.supplier_intel import SupplierIntelligence
 from services.procurement.optimizer import ProcurementOptimizer
@@ -286,7 +286,8 @@ async def list_executive_cards(
         f"SELECT * FROM energy.executive_recommendations WHERE {where} ORDER BY created_at DESC LIMIT 50",
         *params,
     )
-    return {"items": [_row_to_dict(r) for r in rows], "total": len(rows)}
+    items = [normalize_executive_card(_row_to_dict(r)) for r in rows]
+    return {"items": items, "total": len(items)}
 
 
 # ── SPR Optimizer ───────────────────────────────────────────────────────

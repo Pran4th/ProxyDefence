@@ -39,7 +39,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   fetchRiskDashboard,
-  triggerAllIngestors,
   fetchCommodityPrices,
   fetchPortCongestion,
   fetchTankerAvailability,
@@ -47,37 +46,42 @@ import {
   evaluateScenario,
 } from "@/lib/api-intelligence";
 import type { RiskDashboard, DisruptionSignal, ScenarioResult } from "@/types/intelligence";
+import { formatRiskDimension, RiskDimensionLabel } from "@/lib/riskFormat";
 
+// Semantic status tokens only (matches Search.tsx's precedent for the same
+// 5-level severity scale) -- never raw Tailwind palette colors here.
 const severityColor: Record<string, string> = {
-  low: "bg-green-500/10 text-green-500 border-green-500/20",
-  moderate: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  elevated: "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  high: "bg-red-500/10 text-red-500 border-red-500/20",
-  critical: "bg-purple-600/10 text-purple-600 border-purple-600/20",
+  low: "bg-success/10 text-success border-success/20",
+  moderate: "bg-warning/10 text-warning border-warning/20",
+  elevated: "bg-warning/20 text-warning border-warning/30",
+  high: "bg-accent/10 text-accent border-accent/20",
+  critical: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
+// Recharts fills need resolved color values (can't use Tailwind classes),
+// so these read the same CSS custom properties the rest of the design
+// system uses rather than inventing a separate hex palette.
 const dimColor: Record<string, string> = {
-  geopolitical: "#3b82f6",
-  operational: "#f59e0b",
-  economic: "#10b981",
-  environmental: "#8b5cf6",
+  geopolitical: "hsl(var(--primary))",
+  operational: "hsl(var(--warning))",
+  economic: "hsl(var(--success))",
+  environmental: "hsl(var(--accent))",
 };
 
 const dimLabel: Record<string, string> = {
-  geopolitical: "Geopolitical",
-  operational: "Operational",
-  economic: "Economic",
-  environmental: "Environmental",
+  geopolitical: formatRiskDimension("geopolitical").label,
+  operational: formatRiskDimension("operational").label,
+  economic: formatRiskDimension("economic").label,
+  environmental: formatRiskDimension("environmental").label,
 };
 
-const CHART_COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#8b5cf6"];
+const CHART_COLORS = [dimColor.geopolitical, dimColor.operational, dimColor.economic, dimColor.environmental];
 
 const RiskDashboardPage = () => {
   const navigate = useNavigate();
   const [dashboard, setDashboard] = useState<RiskDashboard | null>(null);
   const [signals, setSignals] = useState<DisruptionSignal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ingesting, setIngesting] = useState(false);
   const [prices, setPrices] = useState<any[]>([]);
   const [congestion, setCongestion] = useState<any[]>([]);
   const [tankers, setTankers] = useState<any[]>([]);
@@ -112,18 +116,6 @@ const RiskDashboardPage = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleIngestAll = async () => {
-    setIngesting(true);
-    try {
-      await triggerAllIngestors();
-      await loadData();
-    } catch (err) {
-      console.error("Ingestion failed", err);
-    } finally {
-      setIngesting(false);
-    }
-  };
 
   const handleScenarioEvaluate = async () => {
     setScenarioRunning(true);
@@ -171,17 +163,8 @@ const RiskDashboardPage = () => {
       title="Risk Intelligence"
       subtitle="Real-time geopolitical and operational risk assessment for energy supply chains"
     >
-      {/* Ingestion Controls */}
+      {/* Controls */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <Button
-          onClick={handleIngestAll}
-          disabled={ingesting}
-          variant="default"
-          className="gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${ingesting ? "animate-spin" : ""}`} />
-          {ingesting ? "Ingesting..." : "Refresh All Data"}
-        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -297,7 +280,7 @@ const RiskDashboardPage = () => {
             <div className="space-y-3">
               {signals.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No active signals. Ingest data to generate risk signals.
+                  No active disruption signals right now.
                 </p>
               )}
               {signals.slice(0, 8).map((signal) => (
@@ -355,11 +338,16 @@ const RiskDashboardPage = () => {
         <Card className="rounded-[1.75rem] border-border bg-card shadow-elevation">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <TrendingUp className="h-4 w-4 text-emerald-400" />
+              <TrendingUp className="h-4 w-4 text-success" />
               Commodity Prices
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {prices.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">
+                Not yet connected to a live commodity price feed.
+              </p>
+            ) : (
             <div className="space-y-2">
               {prices.map((p: any) => (
                 <div
@@ -377,8 +365,8 @@ const RiskDashboardPage = () => {
                     <p
                       className={`text-[10px] ${
                         (p.change_pct ?? 0) >= 0
-                          ? "text-emerald-400"
-                          : "text-red-400"
+                          ? "text-success"
+                          : "text-destructive"
                       }`}
                     >
                       {p.change_pct >= 0 ? "+" : ""}
@@ -388,6 +376,7 @@ const RiskDashboardPage = () => {
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
 
@@ -395,11 +384,16 @@ const RiskDashboardPage = () => {
         <Card className="rounded-[1.75rem] border-border bg-card shadow-elevation">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Ship className="h-4 w-4 text-amber-400" />
+              <Ship className="h-4 w-4 text-warning" />
               Port Congestion
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {congestion.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">
+                Not yet connected to a live AIS/port data feed.
+              </p>
+            ) : (
             <div className="space-y-2">
               {congestion.map((c: any) => (
                 <div
@@ -418,10 +412,10 @@ const RiskDashboardPage = () => {
                         <div
                           className={`h-full rounded-full ${
                             c.congestion_pct > 80
-                              ? "bg-red-500"
+                              ? "bg-destructive"
                               : c.congestion_pct > 50
-                                ? "bg-amber-500"
-                                : "bg-emerald-500"
+                                ? "bg-warning"
+                                : "bg-success"
                           }`}
                           style={{ width: `${c.congestion_pct}%` }}
                         />
@@ -434,6 +428,7 @@ const RiskDashboardPage = () => {
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
 
@@ -441,11 +436,16 @@ const RiskDashboardPage = () => {
         <Card className="rounded-[1.75rem] border-border bg-card shadow-elevation">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Warehouse className="h-4 w-4 text-cyan-400" />
+              <Warehouse className="h-4 w-4 text-accent" />
               Tanker Availability
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {tankers.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">
+                Not yet connected to a live AIS data feed.
+              </p>
+            ) : (
             <div className="space-y-2">
               {tankers.map((t: any) => (
                 <div
@@ -465,7 +465,7 @@ const RiskDashboardPage = () => {
                     <p
                       className={`text-[10px] ${
                         t.utilization_pct > 80
-                          ? "text-red-400"
+                          ? "text-destructive"
                           : "text-muted-foreground"
                       }`}
                     >
@@ -475,6 +475,7 @@ const RiskDashboardPage = () => {
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -550,14 +551,12 @@ const RiskDashboardPage = () => {
                       <span
                         className={`font-semibold ${
                           scenarioResult.risk_level === "critical"
-                            ? "text-purple-400"
+                            ? "text-destructive"
                             : scenarioResult.risk_level === "high"
-                              ? "text-red-400"
-                              : scenarioResult.risk_level === "elevated"
-                                ? "text-orange-400"
-                                : scenarioResult.risk_level === "moderate"
-                                  ? "text-yellow-400"
-                                  : "text-green-400"
+                              ? "text-accent"
+                              : scenarioResult.risk_level === "elevated" || scenarioResult.risk_level === "moderate"
+                                ? "text-warning"
+                                : "text-success"
                         }`}
                       >
                         {scenarioResult.risk_level.toUpperCase()}

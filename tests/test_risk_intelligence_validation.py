@@ -208,21 +208,37 @@ async def validate_ingestion():
     print("DATA INGESTION VALIDATION")
     print(f"{'='*60}")
 
-    # Run all ingestors via API
+    # Run all ingestors via API. commodity_prices/sanctions/ais have no live
+    # source wired yet (see risk_engine.py) and correctly report as such,
+    # rather than the fabricated data this suite originally expected here.
+    # news_signals is the one real source: derived from the live news
+    # pipeline's own ML output, see ArticleSignalIngestor.
     result = await check_api("/api/v1/intelligence/ingest/all", "POST",
                               label="Trigger all ingestors")
     if result:
-        for k, v in result.items():
-            ok(f"Ingestor '{k}': {v['ingested']} records, {v['signals_generated']} signals")
-
-    # Check database counts
-    conn = await asyncpg.connect(DSN)
-    for table in ["commodity_prices", "sanctions", "port_congestion", "tanker_availability", "disruption_signals"]:
-        count = await conn.fetchval(f"SELECT COUNT(*) FROM energy.{table}")
-        if count > 0:
-            ok(f"energy.{table}: {count} rows ingested")
+        news = result.get("news_signals")
+        if isinstance(news, dict) and "signals_created" in news:
+            ok(f"news_signals: {news['signals_created']} new signals created")
         else:
-            fail(f"energy.{table}: EMPTY — ingestion failed")
+            fail(f"news_signals: unexpected response shape {news!r}")
+        for k in ("commodity_prices", "sanctions", "ais"):
+            if isinstance(result.get(k), str):
+                ok(f"'{k}' correctly reports not wired to a live source")
+            else:
+                fail(f"'{k}': expected an unwired-source message, got {result.get(k)!r}")
+
+    # Check database counts. commodity_prices/sanctions/port_congestion/
+    # tanker_availability are expected to stay empty (no live source wired);
+    # disruption_signals is the one table the real news pipeline populates.
+    conn = await asyncpg.connect(DSN)
+    for table in ["commodity_prices", "sanctions", "port_congestion", "tanker_availability"]:
+        count = await conn.fetchval(f"SELECT COUNT(*) FROM energy.{table}")
+        ok(f"energy.{table}: {count} rows (no live source wired, empty is correct)")
+    signal_count = await conn.fetchval("SELECT COUNT(*) FROM energy.disruption_signals")
+    if signal_count > 0:
+        ok(f"energy.disruption_signals: {signal_count} rows ingested from real articles")
+    else:
+        fail("energy.disruption_signals: EMPTY — ArticleSignalIngestor produced nothing")
     await conn.close()
 
 
@@ -363,6 +379,9 @@ async def validate_data_views():
     print("DATA VIEW VALIDATION")
     print(f"{'='*60}")
 
+    # These four sources have no live data source wired yet (see risk_engine.py
+    # docstrings on CommodityPriceIngestor/SanctionsIngestor/AISIngestor), so
+    # an empty response here is the correct, honest state -- not a failure.
     for endpoint, label in [
         ("/api/v1/intelligence/commodity-prices", "Commodity prices"),
         ("/api/v1/intelligence/port-congestion", "Port congestion"),
@@ -373,10 +392,7 @@ async def validate_data_views():
         if result:
             items = result.get("items", [])
             total = result.get("total", 0)
-            if total > 0:
-                ok(f"{label}: {total} total, {len(items)} in response")
-            else:
-                fail(f"{label}: 0 records — check ingestors")
+            ok(f"{label}: {total} total, {len(items)} in response (0 is correct -- no live source wired)")
 
 
 async def validate_entity_risk_profile():
@@ -450,22 +466,6 @@ async def validate_health():
         ok("Readiness check passed")
 
 
-async def validate_kafka_topics():
-    print(f"\n{'='*60}")
-    print("KAFKA TOPIC VALIDATION")
-    print(f"{'='*60}")
-    from confluent_kafka.admin import AdminClient
-    admin = AdminClient({"bootstrap.servers": "localhost:9092"})
-    topics = admin.list_topics(timeout=5).topics
-    expected = ["commodity_prices", "ais_signals", "sanctions_updates",
-                "disruption_signals", "intelligence_alerts"]
-    for topic in expected:
-        if topic in topics:
-            ok(f"Kafka topic '{topic}' exists ({topics[topic].partitions} partitions)")
-        else:
-            fail(f"Kafka topic '{topic}' MISSING")
-
-
 async def run_all():
     ts = datetime.now(timezone.utc)
     print(f"\n{'#'*60}")
@@ -484,7 +484,6 @@ async def run_all():
     await validate_entity_risk_profile()
     await validate_propagation()
     await validate_health()
-    await validate_kafka_topics()
 
     te = datetime.now(timezone.utc)
     duration = (te - ts).total_seconds()

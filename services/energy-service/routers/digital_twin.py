@@ -456,7 +456,13 @@ async def get_recommendations(
                 "evidence": "No completed simulation runs found.",
             })
 
-    return {"recommendations": recommendations, "count": len(recommendations)}
+    return {
+        "recommendations": recommendations,
+        "count": len(recommendations),
+        "note": "Preliminary, rule-based suggestions derived from real simulation results -- "
+                "not a ranked/optimized recommendation. For cost-optimized sourcing options, see "
+                "the procurement optimizer.",
+    }
 
 
 # ── History ─────────────────────────────────────────────────────────────────

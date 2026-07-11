@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { api, fetchTopEvents } from "@/lib/api";
+import { api, fetchTopEvents, fetchSystemStatus, type SystemStatus } from "@/lib/api";
 
 const Briefings = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [entities, setEntities] = useState<any[]>([]);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,13 +16,15 @@ const Briefings = () => {
     try {
       setLoading(true);
 
-      const [eventsData, entitiesResponse] = await Promise.all([
+      const [eventsData, entitiesResponse, statusData] = await Promise.all([
         fetchTopEvents(),
         api.get("/analytics/entities"),
+        fetchSystemStatus().catch(() => null),
       ]);
 
       setEvents(eventsData || []);
       setEntities(entitiesResponse.data || []);
+      setSystemStatus(statusData);
     } catch (error) {
       console.error(error);
     } finally {
@@ -83,8 +86,16 @@ const Briefings = () => {
                 Monitoring Status
               </p>
 
-              <p className="mt-2 text-xl font-bold text-green-400">
-                ACTIVE
+              <p
+                className={`mt-2 text-xl font-bold ${
+                  systemStatus?.status === "healthy"
+                    ? "text-success"
+                    : systemStatus?.status === "degraded"
+                      ? "text-warning"
+                      : "text-destructive"
+                }`}
+              >
+                {systemStatus?.status ? systemStatus.status.toUpperCase() : "UNKNOWN"}
               </p>
             </div>
           </div>

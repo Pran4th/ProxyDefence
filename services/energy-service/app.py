@@ -19,6 +19,7 @@ from backend.shared.request_middleware import RequestTrackingMiddleware
 
 from db import get_pool, close_pool, bootstrap
 from routers import catalog, relationships, events, history, bulk, intelligence, digital_twin, procurement
+from services.risk_engine import ArticleSignalIngestor
 
 setup_structlog("energy-service")
 logger = get_logger(__name__)
@@ -81,6 +82,25 @@ health.add_check("postgres", check_postgres)
 health.add_check("intelligence_signals", check_intelligence_signals)
 health.add_check("ingestors", check_ingestors)
 
+NEWS_SIGNAL_INTERVAL_SECONDS = 600
+
+
+async def run_news_signal_ingestion_loop():
+    """Periodically converts real, already-ML-scored articles with real
+    energy-entity matches into energy.disruption_signals rows -- the live
+    replacement for the fake AIS/commodity/sanctions generators removed
+    earlier, so the Risk Dashboard has real content without a manual
+    trigger."""
+    pool = await get_pool()
+    ingestor = ArticleSignalIngestor(pool)
+    while True:
+        try:
+            created = await ingestor.ingest()
+            logger.info("news_signal_ingestion_tick", signals_created=created)
+        except Exception as exc:
+            logger.warning("news_signal_ingestion_tick_failed", error=str(exc))
+        await asyncio.sleep(NEWS_SIGNAL_INTERVAL_SECONDS)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -93,8 +113,10 @@ async def lifespan(app: FastAPI):
     timer.phase("ready")
     logger.info("energy-service ready", startup=timer.finish())
     sys_metrics = asyncio.create_task(collect_system_metrics("energy-service"))
+    news_signals = asyncio.create_task(run_news_signal_ingestion_loop())
     yield
     sys_metrics.cancel()
+    news_signals.cancel()
     await close_pool()
     logger.info("energy-service stopped")
 

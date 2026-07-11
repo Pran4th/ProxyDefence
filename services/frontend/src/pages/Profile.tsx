@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bell, Globe, Lock, Shield, User } from "lucide-react";
 
 import AppShell from "@/components/AppShell";
@@ -6,9 +7,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/context/AuthContext";
+import { updateProfile } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
+  const { toast } = useToast();
+  const [organization, setOrganization] = useState(user?.organization ?? "");
+  const [location, setLocation] = useState(user?.location ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateProfile({ organization: organization || null, location: location || null });
+      setUser(updated);
+      toast({ title: "Profile updated" });
+    } catch (err) {
+      console.error("Failed to update profile", err);
+      toast({ title: "Failed to update profile", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppShell
@@ -42,15 +63,29 @@ const Profile = () => {
 
               <div>
                 <Label htmlFor="organization">Organization</Label>
-                <Input id="organization" defaultValue="ProxyDefence Intelligence Unit" className="mt-1" />
+                <Input
+                  id="organization"
+                  value={organization}
+                  onChange={(e) => setOrganization(e.target.value)}
+                  placeholder="Not set"
+                  className="mt-1"
+                />
               </div>
 
               <div>
                 <Label htmlFor="location">Location</Label>
-                <Input id="location" defaultValue="Global operations" className="mt-1" />
+                <Input
+                  id="location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Not set"
+                  className="mt-1"
+                />
               </div>
 
-              <Button variant="hero">Save Changes</Button>
+              <Button variant="hero" onClick={() => void handleSave()} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
             </div>
           </div>
 
@@ -127,18 +162,14 @@ const Profile = () => {
             <h4 className="mb-4 font-semibold">Account Status</h4>
             <div className="space-y-3">
               <div>
-                <p className="text-sm text-muted-foreground">Plan</p>
-                <p className="text-lg font-bold">Analyst Workspace</p>
+                <p className="text-sm text-muted-foreground">Role</p>
+                <p className="text-lg font-bold capitalize">{user?.role ?? "Analyst"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Member Since</p>
                 <p className="text-lg font-bold">
                   {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "Recently"}
                 </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">API Usage</p>
-                <p className="text-lg font-bold">Protected by JWT</p>
               </div>
             </div>
             <Button variant="outline" className="mt-4 w-full">
