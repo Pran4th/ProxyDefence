@@ -10,13 +10,15 @@ from pathlib import Path
 def project_root() -> Path:
     """Return the absolute path to the repository root.
 
-    Relies on the sentinel file ``.env`` being present at the root.
+    Relies on ``.env`` or its git-tracked template ``.env.example`` being
+    present at the root -- ``.env`` itself is gitignored, so a fresh CI
+    checkout only has the template.
     """
     candidate = Path(__file__).resolve().parent.parent.parent
-    if (candidate / ".env").exists():
+    if (candidate / ".env").exists() or (candidate / ".env.example").exists():
         return candidate
     raise RuntimeError(
-        f"Could not locate project root via .env sentinel (tried {candidate})"
+        f"Could not locate project root via .env/.env.example sentinel (tried {candidate})"
     )
 
 
