@@ -14,6 +14,7 @@ from models import ASSET_TYPE_BY_TABLE
 from backend.shared.logging_config import get_logger
 from services.risk_engine import (
     ArticleSignalIngestor,
+    CommodityPriceIngestor,
     RiskScoringEngine,
     SignalDetector,
 )
@@ -237,12 +238,12 @@ async def list_risk_factors(
 
 
 @router.post("/ingest/commodity-prices")
-async def trigger_commodity_ingest() -> None:
-    raise HTTPException(
-        status_code=501,
-        detail="Not wired to a live commodity price source yet. This previously generated "
-               "simulated data and has been disabled rather than continue serving fake prices.",
-    )
+async def trigger_commodity_ingest(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    ingestor = CommodityPriceIngestor(pool)
+    created = await ingestor.ingest()
+    return {"source": "commodity_prices", "rows_written": created}
 
 
 @router.post("/ingest/sanctions")
@@ -276,11 +277,11 @@ async def trigger_news_signal_ingest(
 async def trigger_all_ingestors(
     pool: asyncpg.Pool = Depends(get_pool),
 ) -> dict[str, Any]:
-    ingestor = ArticleSignalIngestor(pool)
-    created = await ingestor.ingest()
+    signal_count = await ArticleSignalIngestor(pool).ingest()
+    price_count = await CommodityPriceIngestor(pool).ingest()
     return {
-        "news_signals": {"signals_created": created},
-        "commodity_prices": "not wired to a live source -- see /ingest/commodity-prices",
+        "news_signals": {"signals_created": signal_count},
+        "commodity_prices": {"rows_written": price_count},
         "sanctions": "not wired to a live source -- see /ingest/sanctions",
         "ais": "not wired to a live source -- see /ingest/ais",
     }

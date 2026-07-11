@@ -7,8 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/context/AuthContext";
-import { updateProfile } from "@/lib/api";
+import { updateProfile, updateNotificationPreferences, changePassword, type NotificationPreferences } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+
+const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
+  critical_threat_alerts: true,
+  weekly_reports: true,
+  simulation_results: false,
+  system_updates: true,
+};
 
 const Profile = () => {
   const { user, setUser } = useAuth();
@@ -16,6 +23,16 @@ const Profile = () => {
   const [organization, setOrganization] = useState(user?.organization ?? "");
   const [location, setLocation] = useState(user?.location ?? "");
   const [saving, setSaving] = useState(false);
+
+  const [notifications, setNotifications] = useState<NotificationPreferences>(
+    user?.notification_preferences ?? DEFAULT_NOTIFICATIONS
+  );
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -28,6 +45,53 @@ const Profile = () => {
       toast({ title: "Failed to update profile", variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleNotification = async (key: keyof NotificationPreferences, value: boolean) => {
+    const next = { ...notifications, [key]: value };
+    setNotifications(next);
+    setSavingNotifications(true);
+    try {
+      const updated = await updateNotificationPreferences(next);
+      setUser(updated);
+    } catch (err) {
+      console.error("Failed to update notification preferences", err);
+      setNotifications(notifications);
+      toast({ title: "Failed to update notification preference", variant: "destructive" });
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      toast({ title: "Enter your current and new password", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "New password and confirmation do not match", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({ title: "New password must be at least 8 characters", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await changePassword({ current_password: currentPassword, new_password: newPassword });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({ title: "Password changed" });
+    } catch (err: any) {
+      toast({
+        title: "Failed to change password",
+        description: err?.response?.data?.detail ?? "Please check your current password and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -98,20 +162,40 @@ const Profile = () => {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="current-password">Current Password</Label>
-                <Input id="current-password" type="password" className="mt-1" />
+                <Input
+                  id="current-password"
+                  type="password"
+                  className="mt-1"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
               </div>
 
               <div>
                 <Label htmlFor="new-password">New Password</Label>
-                <Input id="new-password" type="password" className="mt-1" />
+                <Input
+                  id="new-password"
+                  type="password"
+                  className="mt-1"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
               </div>
 
               <div>
                 <Label htmlFor="confirm-password">Confirm New Password</Label>
-                <Input id="confirm-password" type="password" className="mt-1" />
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  className="mt-1"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
               </div>
 
-              <Button variant="outline">Change Password</Button>
+              <Button variant="outline" onClick={() => void handleChangePassword()} disabled={changingPassword}>
+                {changingPassword ? "Changing..." : "Change Password"}
+              </Button>
             </div>
           </div>
 
@@ -127,7 +211,11 @@ const Profile = () => {
                   <p className="font-medium">Critical Threat Alerts</p>
                   <p className="text-sm text-muted-foreground">Get notified about critical threats</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={notifications.critical_threat_alerts}
+                  disabled={savingNotifications}
+                  onCheckedChange={(v) => void handleToggleNotification("critical_threat_alerts", v)}
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -135,7 +223,11 @@ const Profile = () => {
                   <p className="font-medium">Weekly Reports</p>
                   <p className="text-sm text-muted-foreground">Receive weekly security summaries</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={notifications.weekly_reports}
+                  disabled={savingNotifications}
+                  onCheckedChange={(v) => void handleToggleNotification("weekly_reports", v)}
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -143,7 +235,11 @@ const Profile = () => {
                   <p className="font-medium">Simulation Results</p>
                   <p className="text-sm text-muted-foreground">Alerts when simulations complete</p>
                 </div>
-                <Switch />
+                <Switch
+                  checked={notifications.simulation_results}
+                  disabled={savingNotifications}
+                  onCheckedChange={(v) => void handleToggleNotification("simulation_results", v)}
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -151,7 +247,11 @@ const Profile = () => {
                   <p className="font-medium">System Updates</p>
                   <p className="text-sm text-muted-foreground">New features and improvements</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={notifications.system_updates}
+                  disabled={savingNotifications}
+                  onCheckedChange={(v) => void handleToggleNotification("system_updates", v)}
+                />
               </div>
             </div>
           </div>
@@ -172,8 +272,13 @@ const Profile = () => {
                 </p>
               </div>
             </div>
-            <Button variant="outline" className="mt-4 w-full">
-              Review Access Policy
+            <Button
+              variant="outline"
+              className="mt-4 w-full"
+              disabled
+              title="Access policy review is not yet available"
+            >
+              Review Access Policy (Coming Soon)
             </Button>
           </div>
 
@@ -183,8 +288,14 @@ const Profile = () => {
             <p className="mb-4 text-sm text-muted-foreground">
               Tune region-specific monitoring for priority theaters and actors.
             </p>
-            <Button variant="outline" size="sm" className="w-full">
-              Configure
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled
+              title="Region-specific monitoring configuration is not yet available"
+            >
+              Coming Soon
             </Button>
           </div>
 
@@ -194,8 +305,8 @@ const Profile = () => {
             <p className="mb-4 text-sm text-muted-foreground">
               Add an extra verification step before granting dashboard access.
             </p>
-            <Button size="sm" className="w-full">
-              Enable 2FA
+            <Button size="sm" className="w-full" disabled title="Two-factor authentication is not yet available">
+              Coming Soon
             </Button>
           </div>
         </div>

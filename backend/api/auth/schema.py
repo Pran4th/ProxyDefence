@@ -15,3 +15,15 @@ class LoginRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     organization: str | None = Field(default=None, max_length=255)
     location: str | None = Field(default=None, max_length=255)
+
+
+class NotificationPreferencesRequest(BaseModel):
+    critical_threat_alerts: bool = True
+    weekly_reports: bool = True
+    simulation_results: bool = False
+    system_updates: bool = True
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)

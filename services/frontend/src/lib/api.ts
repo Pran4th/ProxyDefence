@@ -118,6 +118,13 @@ export interface NetworkGraphData {
   edges: GraphLink[];
 }
 
+export interface NotificationPreferences {
+  critical_threat_alerts: boolean;
+  weekly_reports: boolean;
+  simulation_results: boolean;
+  system_updates: boolean;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -125,6 +132,7 @@ export interface AuthUser {
   role: string;
   organization?: string | null;
   location?: string | null;
+  notification_preferences?: NotificationPreferences;
   created_at: string;
 }
 export interface Event {
@@ -432,6 +440,16 @@ export const fetchSystemStatus = async () => {
 
 export const updateProfile = async (params: { organization?: string | null; location?: string | null }) => {
   const response = await api.patch<AuthUser>("/auth/me", params);
+  return response.data;
+};
+
+export const updateNotificationPreferences = async (params: NotificationPreferences) => {
+  const response = await api.patch<AuthUser>("/auth/me/notifications", params);
+  return response.data;
+};
+
+export const changePassword = async (params: { current_password: string; new_password: string }) => {
+  const response = await api.patch("/auth/me/password", params);
   return response.data;
 };
 

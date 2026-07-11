@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 
-from backend.api.auth.schema import RegisterRequest, LoginRequest
+from backend.api.auth.schema import RegisterRequest, LoginRequest, ChangePasswordRequest
 from backend.api_service.security import create_access_token, hash_password, verify_password
 
 
@@ -49,3 +49,19 @@ class AuthService:
         token = create_access_token(str(user["id"]), {"role": user["role"]})
         user_payload = {key: value for key, value in dict(user).items() if key != "password_hash"}
         return {"access_token": token, "token_type": "bearer", "user": user_payload}
+
+    async def change_password(self, user_id: int, payload: ChangePasswordRequest) -> None:
+        async with self.pool.acquire() as conn:
+            user = await conn.fetchrow(
+                "SELECT password_hash FROM users WHERE id = $1", user_id
+            )
+            if user is None:
+                raise HTTPException(status_code=404, detail="User not found")
+            if not verify_password(payload.current_password, user["password_hash"]):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+
+            await conn.execute(
+                "UPDATE users SET password_hash = $1 WHERE id = $2",
+                hash_password(payload.new_password),
+                user_id,
+            )

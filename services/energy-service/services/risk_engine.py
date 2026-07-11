@@ -476,25 +476,143 @@ class DataIngestor:
 # ── Commodity price ingestor ────────────────────────────────────────────────
 
 
-class CommodityPriceIngestor(DataIngestor):
-    """Commodity benchmark price ingestion -- not yet wired to a live source.
+COMMODITY_LABELS: dict[str, tuple[str, str]] = {
+    "brent_crude": ("Brent Crude", "crude_oil"),
+    "fuel_diesel": ("Diesel", "refined_fuel"),
+    "fuel_petrol_gasoline": ("Gasoline", "refined_fuel"),
+    "fuel_petrol_gasoline_95_octane": ("Gasoline (95 Octane)", "refined_fuel"),
+    "fuel_petrol_gasoline_parallel_market": ("Gasoline (Parallel Market)", "refined_fuel"),
+    "fuel_kerosene": ("Kerosene", "refined_fuel"),
+    "fuel_super_petrol": ("Super Petrol", "refined_fuel"),
+    "fuel_gas": ("Gas", "refined_fuel"),
+}
 
-    Previously generated fabricated prices via hash-based jitter around
-    hardcoded base values, presented as if real. Removed rather than left
-    running: the only live price data currently ingested anywhere in this
-    platform is ml-platform's crude-price-api dataset (Brent spot only, one
-    of the ten benchmarks this class claimed to cover), so a real
-    implementation needs either per-commodity live sources or an honest
-    reduction in scope to what's actually available -- not fake numbers for
-    the other nine."""
+
+class CommodityPriceIngestor(DataIngestor):
+    """Commodity benchmark price ingestion, reusing two datasets ml-platform
+    has already fetched and validated (registered in ml.dataset_catalog)
+    rather than generating fabricated numbers:
+
+    - crude-price-api: one live Brent spot price
+      (datasets/processed/crude-price-api/crude-price-api.csv)
+    - global-fuel-prices: real WFP per-market retail fuel prices, USD-
+      normalized via World Bank FX for a subset of rows
+      (datasets/processed/commodity-prices/{year}/commodity-prices.csv)
+
+    Both are flat files, not queryable tables, so this reads and aggregates
+    them directly rather than adding a new external source. Fuel prices are
+    averaged across markets per (commodity, month) -- the raw per-market
+    rows are far too granular for a benchmark-price table with no location
+    column -- with change_pct computed from the prior month's average."""
 
     source_name = "commodity_prices"
 
     async def ingest(self) -> int:
-        raise NotImplementedError("CommodityPriceIngestor has no live data source wired yet")
+        pool = await self._pool_or_default()
+        rows = self._read_crude_price_api() + self._read_fuel_prices()
+        if not rows:
+            return 0
+
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "DELETE FROM energy.commodity_prices WHERE source IN ('crude_price_api', 'wfp_global_fuel_prices')"
+                )
+                for r in rows:
+                    await conn.execute(
+                        """INSERT INTO energy.commodity_prices
+                           (commodity_name, commodity_family, price, unit, change_pct, source, recorded_at)
+                           VALUES ($1,$2,$3,$4,$5,$6,$7)""",
+                        r["commodity_name"], r["commodity_family"], r["price"],
+                        r["unit"], r["change_pct"], r["source"], r["recorded_at"],
+                    )
+        logger.info("commodity_price_ingest_complete", rows=len(rows))
+        return len(rows)
+
+    def _read_crude_price_api(self) -> list[dict]:
+        from backend.shared.paths import project_root
+
+        path = project_root() / "datasets" / "processed" / "crude-price-api" / "crude-price-api.csv"
+        if not path.exists():
+            return []
+
+        import csv
+
+        with path.open(encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            spot_rows = [row for row in reader if row.get("entity_type") == "commodity_price"]
+        if not spot_rows:
+            return []
+
+        latest = max(spot_rows, key=lambda r: r["timestamp"])
+        attrs = json.loads(latest["attributes"])
+        return [{
+            "commodity_name": "Brent Crude",
+            "commodity_family": "crude_oil",
+            "price": float(attrs["price"]),
+            "unit": f"{attrs.get('currency', 'USD')}/barrel",
+            "change_pct": 0.0,  # single spot reading, no prior point to diff against
+            "source": "crude_price_api",
+            "recorded_at": datetime.fromisoformat(latest["timestamp"].replace("Z", "+00:00")),
+        }]
+
+    def _read_fuel_prices(self) -> list[dict]:
+        from backend.shared.paths import project_root
+        import ast
+        import csv
+        from collections import defaultdict
+
+        root = project_root() / "datasets" / "processed" / "commodity-prices"
+        if not root.exists():
+            return []
+
+        # month -> commodity -> [price_usd, ...]
+        by_month: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+        for csv_path in sorted(root.glob("*/commodity-prices.csv")):
+            with csv_path.open(encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    try:
+                        attrs = ast.literal_eval(row["attributes"])
+                    except (ValueError, SyntaxError):
+                        continue
+                    price_usd = attrs.get("price_usd")
+                    commodity = attrs.get("commodity")
+                    timestamp = row.get("timestamp", "")
+                    if price_usd is None or not commodity or len(timestamp) < 7:
+                        continue
+                    by_month[timestamp[:7]][commodity].append(float(price_usd))
+
+        if not by_month:
+            return []
+
+        months = sorted(by_month.keys())
+        latest_month, prior_month = months[-1], (months[-2] if len(months) > 1 else None)
+
+        results = []
+        for commodity, prices in by_month[latest_month].items():
+            label, family = COMMODITY_LABELS.get(commodity, (commodity.replace("_", " ").title(), "refined_fuel"))
+            avg_price = sum(prices) / len(prices)
+
+            change_pct = 0.0
+            if prior_month and commodity in by_month[prior_month]:
+                prior_prices = by_month[prior_month][commodity]
+                prior_avg = sum(prior_prices) / len(prior_prices)
+                if prior_avg:
+                    change_pct = round((avg_price - prior_avg) / prior_avg * 100, 2)
+
+            results.append({
+                "commodity_name": label,
+                "commodity_family": family,
+                "price": round(avg_price, 4),
+                "unit": "USD/liter",
+                "change_pct": change_pct,
+                "source": "wfp_global_fuel_prices",
+                "recorded_at": datetime.strptime(latest_month, "%Y-%m").replace(tzinfo=timezone.utc),
+            })
+        return results
 
     async def detect_signals(self, detector: SignalDetector) -> list[dict]:
-        raise NotImplementedError("CommodityPriceIngestor has no live data source wired yet")
+        raise NotImplementedError("Signals are not derived from commodity prices in this pass")
 
 
 # ── Sanctions ingestor ──────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(20) NOT NULL DEFAULT 'analyst',
     organization TEXT,
     location TEXT,
+    notification_preferences JSONB NOT NULL DEFAULT '{"critical_threat_alerts": true, "weekly_reports": true, "simulation_results": false, "system_updates": true}'::jsonb,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -19,7 +19,7 @@ from backend.shared.request_middleware import RequestTrackingMiddleware
 
 from db import get_pool, close_pool, bootstrap
 from routers import catalog, relationships, events, history, bulk, intelligence, digital_twin, procurement
-from services.risk_engine import ArticleSignalIngestor
+from services.risk_engine import ArticleSignalIngestor, CommodityPriceIngestor
 
 setup_structlog("energy-service")
 logger = get_logger(__name__)
@@ -112,6 +112,11 @@ async def lifespan(app: FastAPI):
     await bootstrap(pool)
     timer.phase("ready")
     logger.info("energy-service ready", startup=timer.finish())
+    try:
+        price_rows = await CommodityPriceIngestor(pool).ingest()
+        logger.info("commodity_price_ingest_at_startup", rows_written=price_rows)
+    except Exception as exc:
+        logger.warning("commodity_price_ingest_at_startup_failed", error=str(exc))
     sys_metrics = asyncio.create_task(collect_system_metrics("energy-service"))
     news_signals = asyncio.create_task(run_news_signal_ingestion_loop())
     yield

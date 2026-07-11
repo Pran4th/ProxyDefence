@@ -67,11 +67,13 @@ import {
 } from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 type TabValue = "overview" | "suppliers" | "compatibility" | "optimize" | "executive";
 
 export default function Procurement() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabValue>("overview");
 
@@ -118,26 +120,52 @@ export default function Procurement() {
     queryFn: () => fetchExecutiveCards(),
   });
 
+  const mutationErrorToast = (title: string) => (err: any) =>
+    toast({
+      title,
+      description: err?.response?.data?.detail ?? "Could not reach the energy service. Check that it's running.",
+      variant: "destructive" as const,
+    });
+
   const enrichMutation = useMutation({
     mutationFn: enrichSuppliers,
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["procurement-suppliers"] });
       queryClient.invalidateQueries({ queryKey: ["procurement-health"] });
+      toast({
+        title: "Supplier enrichment complete",
+        description: data?.enriched
+          ? `${data.enriched} supplier profile(s) enriched with real signals.`
+          : "All supplier profiles are already enriched -- nothing new to update.",
+      });
     },
+    onError: mutationErrorToast("Supplier enrichment failed"),
   });
 
   const compatMutation = useMutation({
     mutationFn: computeCompatibility,
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["procurement-health"] });
+      toast({
+        title: "Compatibility matrix computed",
+        description: `${data?.refineries_evaluated ?? 0} refineries x ${data?.commodities_evaluated ?? 0} commodities evaluated` +
+          (data?.pairs_created ? ` -- ${data.pairs_created} new pair(s) scored.` : " -- already up to date."),
+      });
     },
+    onError: mutationErrorToast("Compatibility computation failed"),
   });
 
   const routeMutation = useMutation({
     mutationFn: computeRouteCosts,
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["procurement-health"] });
+      toast({
+        title: "Route costs computed",
+        description: `${data?.routes_evaluated ?? 0} routes evaluated` +
+          (data?.route_costs_created ? ` -- ${data.route_costs_created} new route(s) priced.` : " -- already up to date."),
+      });
     },
+    onError: mutationErrorToast("Route cost computation failed"),
   });
 
   const runMutation = useMutation({
@@ -148,7 +176,9 @@ export default function Procurement() {
       queryClient.invalidateQueries({ queryKey: ["procurement-runs"] });
       queryClient.invalidateQueries({ queryKey: ["procurement-health"] });
       setActiveTab("executive");
+      toast({ title: "Procurement run complete", description: "Executive recommendations are ready." });
     },
+    onError: mutationErrorToast("Procurement run failed"),
   });
 
   const ackMutation = useMutation({
@@ -158,7 +188,9 @@ export default function Procurement() {
       if (selectedRun) {
         queryClient.invalidateQueries({ queryKey: ["procurement-run", selectedRun] });
       }
+      toast({ title: "Recommendation acknowledged" });
     },
+    onError: mutationErrorToast("Failed to acknowledge recommendation"),
   });
 
   const handleRun = () => {

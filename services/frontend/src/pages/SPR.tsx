@@ -65,11 +65,13 @@ import {
 } from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 type TabValue = "overview" | "facilities" | "release" | "timeline" | "decisions";
 
 export default function SPR() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabValue>("overview");
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
@@ -116,6 +118,14 @@ export default function SPR() {
       queryClient.invalidateQueries({ queryKey: ["spr-runs"] });
       queryClient.invalidateQueries({ queryKey: ["spr-health"] });
       setActiveTab("timeline");
+      toast({ title: "SPR analysis complete", description: "Release plan and recommendations are ready." });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "SPR analysis failed",
+        description: err?.response?.data?.detail ?? "Could not reach the energy service. Check that it's running.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -125,14 +135,35 @@ export default function SPR() {
       if (selectedRun) {
         queryClient.invalidateQueries({ queryKey: ["spr-run", selectedRun] });
       }
+      toast({ title: "Recommendation acknowledged" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to acknowledge recommendation",
+        description: err?.response?.data?.detail ?? "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
   const initMutation = useMutation({
     mutationFn: initSPR,
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["spr-facilities"] });
       queryClient.invalidateQueries({ queryKey: ["spr-health"] });
+      toast({
+        title: "SPR facilities synchronized",
+        description: data?.facilities_initialized
+          ? `${data.facilities_initialized} new facility record(s) created (${data.total_facilities} total).`
+          : `Already up to date -- ${data?.total_facilities ?? 0} facilities on file.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "SPR initialization failed",
+        description: err?.response?.data?.detail ?? "Could not reach the energy service. Check that it's running.",
+        variant: "destructive",
+      });
     },
   });
 
