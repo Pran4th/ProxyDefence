@@ -18,7 +18,7 @@ from backend.shared.observability import (
 from backend.shared.request_middleware import RequestTrackingMiddleware
 
 from db import get_pool, close_pool, bootstrap
-from routers import catalog, relationships, events, history, bulk, intelligence, digital_twin, procurement
+from routers import catalog, relationships, events, history, bulk, intelligence, digital_twin, procurement, command_center
 from services.risk_engine import ArticleSignalIngestor, CommodityPriceIngestor
 
 setup_structlog("energy-service")
@@ -138,6 +138,7 @@ app.include_router(bulk.router)
 app.include_router(intelligence.router)
 app.include_router(digital_twin.router)
 app.include_router(procurement.router)
+app.include_router(command_center.router)
 
 
 @app.get("/")
