@@ -465,6 +465,55 @@ async def get_article_impact(
     return {"has_impact_data": True, "signals": signals}
 
 
+@router.get("/impact-feed")
+async def get_impact_feed(
+    limit: int = Query(15, ge=1, le=50),
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """The continuous 'this news, X hours ago -> this much estimated market
+    pressure' feed: recent active signals, each with its reasoning and
+    exposure estimate pre-computed. One CorridorRiskEngine instance is
+    reused across every signal in the batch so the corridor blend, live
+    Brent price, and national demand are each fetched once per request,
+    not once per signal (see CorridorRiskEngine's caching)."""
+    from services.corridor_risk import CorridorRiskEngine
+
+    rows = await pool.fetch(
+        """SELECT * FROM energy.disruption_signals
+           WHERE expires_at > NOW()
+           ORDER BY CASE severity
+                        WHEN 'critical' THEN 4
+                        WHEN 'high' THEN 3
+                        WHEN 'elevated' THEN 2
+                        WHEN 'moderate' THEN 1
+                        ELSE 0
+                    END DESC,
+                    created_at DESC
+           LIMIT $1""",
+        limit,
+    )
+
+    engine = CorridorRiskEngine(pool)
+    items = []
+    for r in rows:
+        explanation = await engine.explain_signal(_row_to_dict(r))
+        items.append({
+            "signal_uuid": str(r["uuid"]),
+            "title": r["title"],
+            "severity": r["severity"],
+            "risk_dimension": r["risk_dimension"],
+            "source": r["source"],
+            "detected_at": r["created_at"].isoformat(),
+            **explanation,
+        })
+
+    return {
+        "items": items,
+        "total": len(items),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 # ── Corridor & supplier disruption probability ──────────────────────────────
 
 

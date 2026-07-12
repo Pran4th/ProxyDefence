@@ -282,3 +282,22 @@ export async function fetchArticleImpact(articleId: number): Promise<ArticleImpa
   const { data } = await api.get(`${BASE}/articles/${articleId}/impact`);
   return data;
 }
+
+// ── Real-time market impact feed ─────────────────────────────────────────
+
+export interface ImpactFeedItem extends SignalExplanation {
+  title: string;
+  severity: string;
+  risk_dimension: string;
+  source: string;
+  detected_at: string;
+}
+
+export async function fetchImpactFeed(limit = 15): Promise<{
+  items: ImpactFeedItem[];
+  total: number;
+  generated_at: string;
+}> {
+  const { data } = await api.get(`${BASE}/impact-feed`, { params: { limit } });
+  return data;
+}

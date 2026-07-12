@@ -197,6 +197,9 @@ def _logistic_squash(blend: float) -> float:
 class CorridorRiskEngine:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
+        self._corridor_cache: dict[str, Any] | None = None
+        self._brent_cache: float | None = None
+        self._demand_cache: float | None = None
 
     async def _member_entity_uuids(self, corridor: dict[str, Any]) -> list[str]:
         rows = await self.pool.fetch(
@@ -280,7 +283,15 @@ class CorridorRiskEngine:
         deviation = abs(observed - baseline) / baseline
         return round(min(1.0, deviation), 4)
 
-    async def compute_all(self) -> dict[str, Any]:
+    async def compute_all(self, use_cache: bool = False) -> dict[str, Any]:
+        """use_cache reuses this engine instance's last computed snapshot --
+        for batch use (e.g. explaining many signals in one feed request)
+        where recomputing the full corridor blend per signal would be
+        wasteful; each top-level API call still gets a fresh instance and
+        therefore a fresh computation by default."""
+        if use_cache and self._corridor_cache is not None:
+            return self._corridor_cache
+
         india_shares, imports_year = _load_india_shares()
         ais_counts, ais_ts = _load_ais_counts()
 
@@ -325,12 +336,14 @@ class CorridorRiskEngine:
             })
 
         corridors_out.sort(key=lambda c: c["probability_30d"], reverse=True)
-        return {
+        result = {
             "corridors": corridors_out,
             "assumptions": ASSUMPTIONS,
             "ais_snapshot_at": ais_ts,
             "computed_at": datetime.now(timezone.utc).isoformat(),
         }
+        self._corridor_cache = result
+        return result
 
     async def supplier_risk(self) -> dict[str, Any]:
         """Composite supplier disruption exposure: the supplier's own risk
@@ -386,18 +399,24 @@ class CorridorRiskEngine:
     # ── Per-signal reasoning ("why is this high") ────────────────────────────
 
     async def _live_brent_usd_bbl(self) -> float:
+        if self._brent_cache is not None:
+            return self._brent_cache
         row = await self.pool.fetchrow(
             """SELECT price FROM energy.commodity_prices
                WHERE commodity_name ILIKE '%brent%'
                ORDER BY recorded_at DESC LIMIT 1"""
         )
-        return float(row["price"]) if row and row["price"] else 85.0
+        self._brent_cache = float(row["price"]) if row and row["price"] else 85.0
+        return self._brent_cache
 
     async def _national_demand_bpd(self) -> float:
+        if self._demand_cache is not None:
+            return self._demand_cache
         val = await self.pool.fetchval(
             "SELECT SUM(daily_demand_bpd) FROM energy.demand_profiles WHERE is_active = true"
         )
-        return float(val) if val else 9_700_000.0  # last-known India total, fallback only
+        self._demand_cache = float(val) if val else 9_700_000.0  # last-known India total, fallback only
+        return self._demand_cache
 
     async def explain_signal(self, signal: dict[str, Any]) -> dict[str, Any]:
         """Plain-language reasoning plus a rough, assumption-labeled economic
@@ -420,7 +439,7 @@ class CorridorRiskEngine:
         corridor_probability = None
         india_share_pct = None
         if matched_key:
-            all_corridors = await self.compute_all()
+            all_corridors = await self.compute_all(use_cache=True)
             match = next(
                 (c for c in all_corridors["corridors"] if c["key"] == matched_key), None
             )

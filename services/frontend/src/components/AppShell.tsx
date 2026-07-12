@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Crosshair,
   LogOut,
+  Radio,
   Settings,
   Shield,
   UserCircle2,
@@ -26,6 +27,7 @@ import Logo from "@/components/Logo";
 
 const navItems = [
   { to: "/command", label: "Command Center", icon: Crosshair },
+  { to: "/impact-feed", label: "Market Impact Feed", icon: Radio },
   { to: "/dashboard", label: "Dashboard", icon: Activity },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/simulations", label: "Simulations", icon: Cpu },

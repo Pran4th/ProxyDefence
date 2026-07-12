@@ -31,6 +31,7 @@ const RiskDashboard = lazy(() => import("./pages/RiskDashboard"));
 const Procurement = lazy(() => import("./pages/Procurement"));
 const SPR = lazy(() => import("./pages/SPR"));
 const CommandCenter = lazy(() => import("./pages/CommandCenter"));
+const MarketImpactFeed = lazy(() => import("./pages/MarketImpactFeed"));
 const queryClient = new QueryClient();
 
 const RouteLoader = () => (
@@ -153,6 +154,14 @@ const App = () => (
                   element={(
                     <ProtectedRoute>
                       <CommandCenter />
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/impact-feed"
+                  element={(
+                    <ProtectedRoute>
+                      <MarketImpactFeed />
                     </ProtectedRoute>
                   )}
                 />
