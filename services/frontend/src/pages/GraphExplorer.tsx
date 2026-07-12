@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Network, RefreshCw, Search, ZoomIn, ZoomOut, Zap } from "lucide-react";
+import { Network, RefreshCw, Search, ZoomIn, ZoomOut } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import CytoscapeComponent from "react-cytoscapejs";
 
@@ -28,14 +28,57 @@ type GraphPayload = {
   edge_count?: number;
 };
 
+// Real entity types from energy.entity_relationships (source_entity_type /
+// target_entity_type) plus the intel graph's "Actor" bucket -- every value
+// here is a type that genuinely appears in the data, not decorative.
+const ENTITY_COLORS: Record<string, string> = {
+  refinery: "#f59e0b",
+  port: "#38bdf8",
+  pipeline: "#a78bfa",
+  oil_field: "#84cc16",
+  gas_field: "#2dd4bf",
+  storage_facility: "#fb923c",
+  strategic_petroleum_reserve: "#ef4444",
+  supplier: "#eab308",
+  power_plant: "#f472b6",
+  shipping_route: "#60a5fa",
+  organization: "#c084fc",
+  location: "#34d399",
+  actor: "#94a3b8",
+};
+const DEFAULT_COLOR = "#6b7280";
+
+function colorFor(entityType: string | undefined): string {
+  if (!entityType) return DEFAULT_COLOR;
+  return ENTITY_COLORS[entityType.toLowerCase()] ?? DEFAULT_COLOR;
+}
+
+function labelFor(entityType: string): string {
+  return entityType
+    .split("_")
+    .map((w) => w[0]?.toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+type TooltipState = {
+  x: number;
+  y: number;
+  label: string;
+  entityType: string;
+  degree: number;
+} | null;
+
 const GraphExplorer = () => {
   const [searchParams] = useSearchParams();
   const cyRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [graph, setGraph] = useState<GraphPayload>({ nodes: [], edges: [] });
   const [entity, setEntity] = useState(() => searchParams.get("entity") ?? "");
   const [activeEntity, setActiveEntity] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const [tooltip, setTooltip] = useState<TooltipState>(null);
 
   const loadNetwork = () => {
     setLoading(true);
@@ -66,11 +109,11 @@ const GraphExplorer = () => {
           seenEdges.add(`${sourceLabel}|${targetLabel}`);
 
           if (!existingNodeIds.has(sourceLabel)) {
-            merged.nodes.push({ id: sourceLabel, label: sourceLabel, group: "energy", val: 10 });
+            merged.nodes.push({ id: sourceLabel, label: sourceLabel, group: rel.source_entity_type, val: 10 });
             existingNodeIds.add(sourceLabel);
           }
           if (!existingNodeIds.has(targetLabel)) {
-            merged.nodes.push({ id: targetLabel, label: targetLabel, group: "energy", val: 10 });
+            merged.nodes.push({ id: targetLabel, label: targetLabel, group: rel.target_entity_type, val: 10 });
             existingNodeIds.add(targetLabel);
           }
 
@@ -113,20 +156,23 @@ const GraphExplorer = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const graphElements = useMemo(() => {
-    const nodes = new Map<string, { data: { id: string; label: string } }>();
+  const { elements: allElements, typeCounts } = useMemo(() => {
+    const nodes = new Map<string, { data: { id: string; label: string; entityType: string; degree: number } }>();
     const edges: { data: { id: string; source: string; target: string; label: string; confidence: number } }[] = [];
+    const degree = new Map<string, number>();
+
+    const ensureNode = (id: string, label: string, entityType: string | undefined) => {
+      if (!nodes.has(id)) {
+        nodes.set(id, {
+          data: { id, label, entityType: (entityType || "actor").toLowerCase(), degree: 0 },
+        });
+      }
+    };
 
     graph.nodes.forEach((node) => {
       const id = node.id || node.label;
       if (!id) return;
-
-      nodes.set(id, {
-        data: {
-          id,
-          label: node.label || id,
-        },
-      });
+      ensureNode(id, node.label || id, node.group);
     });
 
     graph.edges.forEach((edge, index) => {
@@ -134,18 +180,10 @@ const GraphExplorer = () => {
       const target = edge.target || edge.target_entity;
       if (!source || !target || source === target) return;
 
-      nodes.set(source, {
-        data: {
-          id: source,
-          label: source,
-        },
-      });
-      nodes.set(target, {
-        data: {
-          id: target,
-          label: target,
-        },
-      });
+      ensureNode(source, source, undefined);
+      ensureNode(target, target, undefined);
+      degree.set(source, (degree.get(source) || 0) + 1);
+      degree.set(target, (degree.get(target) || 0) + 1);
 
       edges.push({
         data: {
@@ -158,8 +196,36 @@ const GraphExplorer = () => {
       });
     });
 
-    return [...nodes.values(), ...edges];
+    const counts: Record<string, number> = {};
+    for (const [id, n] of nodes) {
+      n.data.degree = degree.get(id) || 0;
+      counts[n.data.entityType] = (counts[n.data.entityType] || 0) + 1;
+    }
+
+    return { elements: [...nodes.values(), ...edges], typeCounts: counts };
   }, [graph]);
+
+  const graphElements = useMemo(() => {
+    if (hiddenTypes.size === 0) return allElements;
+    const visibleNodeIds = new Set(
+      allElements
+        .filter((el: any) => "entityType" in el.data && !hiddenTypes.has(el.data.entityType))
+        .map((el: any) => el.data.id)
+    );
+    return allElements.filter((el: any) => {
+      if ("entityType" in el.data) return visibleNodeIds.has(el.data.id);
+      return visibleNodeIds.has(el.data.source) && visibleNodeIds.has(el.data.target);
+    });
+  }, [allElements, hiddenTypes]);
+
+  const toggleType = (type: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -239,7 +305,34 @@ const GraphExplorer = () => {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-3xl border border-border bg-[#08111e]">
+        {Object.keys(typeCounts).length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {Object.entries(typeCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, count]) => {
+                const hidden = hiddenTypes.has(type);
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => toggleType(type)}
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-opacity ${
+                      hidden ? "border-border/50 opacity-40" : "border-border"
+                    }`}
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: colorFor(type) }}
+                    />
+                    <span>{labelFor(type)}</span>
+                    <span className="text-muted-foreground">{count}</span>
+                  </button>
+                );
+              })}
+          </div>
+        )}
+
+        <div ref={containerRef} className="relative overflow-hidden rounded-3xl border border-border bg-[#08111e]">
           {loading ? (
             <div className="flex h-[620px] items-center justify-center text-sm text-slate-300">
               Loading graph...
@@ -249,39 +342,57 @@ const GraphExplorer = () => {
               {error}
             </div>
           ) : (
-            <CytoscapeComponent
-              elements={graphElements}
-              style={{ width: "100%", height: "620px" }}
-              minZoom={0.25}
-              maxZoom={2.5}
-              zoomingEnabled
-              userZoomingEnabled
-              panningEnabled
-              userPanningEnabled
-              layout={{
-                name: "cose",
-                animate: true,
-                fit: true,
-                padding: 48,
-              }}
-              cy={(cy) => {
-                cyRef.current = cy;
-                cy.removeAllListeners();
-                cy.on("tap", "node", (event) => {
-                  const nodeId = event.target.id();
-                  setEntity(nodeId);
-                  loadEntityGraph(nodeId);
-                });
-              }}
+            <>
+              <CytoscapeComponent
+                elements={graphElements}
+                style={{ width: "100%", height: "620px" }}
+                minZoom={0.25}
+                maxZoom={2.5}
+                zoomingEnabled
+                userZoomingEnabled
+                panningEnabled
+                userPanningEnabled
+                layout={{
+                  name: "cose",
+                  animate: true,
+                  fit: true,
+                  padding: 48,
+                }}
+                cy={(cy) => {
+                  cyRef.current = cy;
+                  cy.removeAllListeners();
+                  cy.on("tap", "node", (event) => {
+                    const nodeId = event.target.id();
+                    setEntity(nodeId);
+                    loadEntityGraph(nodeId);
+                  });
+                  cy.on("mouseover", "node", (event) => {
+                    const n = event.target;
+                    const pos = n.renderedPosition();
+                    setTooltip({
+                      x: pos.x,
+                      y: pos.y,
+                      label: n.data("label"),
+                      entityType: n.data("entityType"),
+                      degree: n.data("degree"),
+                    });
+                  });
+                  cy.on("mousemove", "node", (event) => {
+                    const n = event.target;
+                    const pos = n.renderedPosition();
+                    setTooltip((prev) => (prev ? { ...prev, x: pos.x, y: pos.y } : prev));
+                  });
+                  cy.on("mouseout", "node", () => setTooltip(null));
+                }}
                 stylesheet={[
                   {
                     selector: "node",
                     style: {
-                      "background-color": "hsl(var(--primary))",
+                      "background-color": DEFAULT_COLOR,
                       "border-color": "rgba(255,255,255,0.35)",
                       "border-width": 1,
                       color: "#f8fafc",
-                      "font-size": 12,
+                      "font-size": 11,
                       label: "data(label)",
                       "overlay-opacity": 0,
                       "text-background-color": "#08111e",
@@ -290,20 +401,14 @@ const GraphExplorer = () => {
                       "text-margin-y": -10,
                       "text-max-width": 120,
                       "text-wrap": "wrap",
-                      width: 28,
-                      height: 28,
+                      width: "mapData(degree, 0, 15, 18, 52)",
+                      height: "mapData(degree, 0, 15, 18, 52)",
                     },
                   },
-                  {
-                    selector: "node[group = 'energy']",
-                    style: {
-                      "background-color": "#f59e0b",
-                      "border-color": "rgba(245,158,11,0.6)",
-                      "border-width": 2,
-                      width: 20,
-                      height: 20,
-                    },
-                  },
+                  ...Object.entries(ENTITY_COLORS).map(([type, color]) => ({
+                    selector: `node[entityType = "${type}"]`,
+                    style: { "background-color": color, "border-color": color },
+                  })),
                   {
                     selector: "edge",
                     style: {
@@ -320,16 +425,35 @@ const GraphExplorer = () => {
                       width: 1.5,
                     },
                   },
-                {
-                  selector: "node:selected",
-                  style: {
-                    "background-color": "hsl(var(--accent))",
-                    "border-color": "hsl(var(--accent))",
-                    "border-width": 3,
+                  {
+                    // Cytoscape's stylesheet isn't real CSS -- it doesn't
+                    // resolve var(), so `hsl(var(--accent))` silently failed
+                    // here (pre-existing, not introduced by this change; a
+                    // literal color is required).
+                    selector: "node:selected",
+                    style: {
+                      "border-color": "#2dd4bf",
+                      "border-width": 3,
+                    },
                   },
-                },
-              ]}
-            />
+                ]}
+              />
+              {tooltip && (
+                <div
+                  className="pointer-events-none absolute z-10 rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-elevation"
+                  style={{ left: tooltip.x + 14, top: tooltip.y + 14, maxWidth: 220 }}
+                >
+                  <p className="font-semibold leading-tight">{tooltip.label}</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: colorFor(tooltip.entityType) }}
+                    />
+                    {labelFor(tooltip.entityType)} · {tooltip.degree} connection{tooltip.degree === 1 ? "" : "s"}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
