@@ -200,6 +200,19 @@ class CorridorRiskEngine:
         self._corridor_cache: dict[str, Any] | None = None
         self._brent_cache: float | None = None
         self._demand_cache: float | None = None
+        self._partner_names_cache: dict[str, str] | None = None
+
+    async def _partner_country_names(self, iso3_codes: tuple[str, ...]) -> list[str]:
+        """Resolve a corridor's real member-country ISO3 codes to display
+        names via energy.locations -- this is genuinely real data (the
+        corridor's actual supplier-country membership from CORRIDORS[key]),
+        not a fabricated per-country breakdown the model doesn't compute."""
+        if self._partner_names_cache is None:
+            rows = await self.pool.fetch(
+                "SELECT iso_code_3, name FROM energy.locations WHERE iso_code_3 IS NOT NULL"
+            )
+            self._partner_names_cache = {r["iso_code_3"]: r["name"] for r in rows}
+        return [self._partner_names_cache[c] for c in iso3_codes if c in self._partner_names_cache]
 
     async def _member_entity_uuids(self, corridor: dict[str, Any]) -> list[str]:
         rows = await self.pool.fetch(
@@ -438,6 +451,7 @@ class CorridorRiskEngine:
         corridor_name = None
         corridor_probability = None
         india_share_pct = None
+        partner_countries: list[str] = []
         if matched_key:
             all_corridors = await self.compute_all(use_cache=True)
             match = next(
@@ -447,6 +461,7 @@ class CorridorRiskEngine:
                 corridor_name = match["name"]
                 corridor_probability = match["probability_30d"]
                 india_share_pct = match["india_import_share_pct"]
+            partner_countries = await self._partner_country_names(CORRIDORS[matched_key]["partners"])
 
         exposure_usd = None
         if india_share_pct:
@@ -454,11 +469,19 @@ class CorridorRiskEngine:
             national_demand_bpd = await self._national_demand_bpd()
             daily_import_value_usd = national_demand_bpd * brent
             ttl_hours = float(signal.get("ttl_hours") or 72)
+            # corridor_probability was computed above but never actually fed
+            # into the dollar figure -- exposure clustered into a handful of
+            # bands driven almost entirely by `confidence` (a narrow ML-output
+            # range), regardless of how likely the disruption actually was.
+            # This is expected-value risk modeling: exposure should scale with
+            # likelihood, not just one article's severity/confidence.
+            likelihood = corridor_probability if corridor_probability is not None else 1.0
             exposure_usd = round(
                 daily_import_value_usd
                 * (india_share_pct / 100)
                 * severity_score
                 * confidence
+                * likelihood
                 * (ttl_hours / 24),
                 0,
             )
@@ -474,6 +497,8 @@ class CorridorRiskEngine:
                 f"probability"
                 + (f" and {india_share_pct}% of India's crude imports." if india_share_pct else ".")
             )
+        if partner_countries:
+            parts.append(f"Markets whose supply routes through this corridor: {', '.join(partner_countries)}.")
         if regions:
             parts.append(f"Affected regions: {', '.join(regions[:4])}.")
         if commodities:
@@ -496,12 +521,13 @@ class CorridorRiskEngine:
             "corridor_name": corridor_name,
             "corridor_probability_30d": corridor_probability,
             "india_import_share_pct": india_share_pct,
+            "corridor_partner_countries": partner_countries,
             "estimated_exposure_usd": exposure_usd,
             "assumptions": [
                 {
                     "name": "exposure_formula",
-                    "value": "national_demand_bpd × live_brent × india_share × severity × confidence × (ttl_hours/24)",
-                    "source": "Derived from live energy.demand_profiles + live Brent, same pattern as digital_twin/flow.py",
+                    "value": "national_demand_bpd × live_brent × india_share × severity × confidence × corridor_probability_30d × (ttl_hours/24)",
+                    "source": "Expected-value style: exposure scales with likelihood (corridor_probability_30d) as well as severity/confidence, not severity/confidence alone",
                     "how_to_test": "Compare against the digital twin's full scenario run for the same event",
                 },
             ],

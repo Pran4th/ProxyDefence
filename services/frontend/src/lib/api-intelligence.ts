@@ -257,6 +257,7 @@ export interface SignalExplanation {
   corridor_name: string | null;
   corridor_probability_30d: number | null;
   india_import_share_pct: number | null;
+  corridor_partner_countries: string[];
   estimated_exposure_usd: number | null;
   assumptions: { name: string; value: unknown; source: string; how_to_test: string }[];
 }
@@ -291,6 +292,7 @@ export interface ImpactFeedItem extends SignalExplanation {
   risk_dimension: string;
   source: string;
   detected_at: string;
+  based_on_signals: number;
 }
 
 export async function fetchImpactFeed(limit = 15): Promise<{

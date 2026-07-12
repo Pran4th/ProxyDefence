@@ -465,6 +465,9 @@ async def get_article_impact(
     return {"has_impact_data": True, "signals": signals}
 
 
+_SEVERITY_RANK = {"critical": 4, "high": 3, "elevated": 2, "moderate": 1, "low": 0}
+
+
 @router.get("/impact-feed")
 async def get_impact_feed(
     limit: int = Query(15, ge=1, le=50),
@@ -475,9 +478,19 @@ async def get_impact_feed(
     exposure estimate pre-computed. One CorridorRiskEngine instance is
     reused across every signal in the batch so the corridor blend, live
     Brent price, and national demand are each fetched once per request,
-    not once per signal (see CorridorRiskEngine's caching)."""
+    not once per signal (see CorridorRiskEngine's caching).
+
+    Multiple articles about the same real-world event routinely match the
+    same corridor within the same day (ArticleSignalIngestor dedupes per
+    article, not across articles covering one event), which made the feed
+    look repetitive -- N near-identical cards for one event. Signals are
+    grouped by (matched corridor, day) and collapsed to one representative
+    card noting how many signals fed into it."""
     from services.corridor_risk import CorridorRiskEngine
 
+    # Over-fetch so there's enough raw signal pool left to fill `limit`
+    # distinct groups after collapsing near-duplicates.
+    fetch_limit = min(limit * 4, 80)
     rows = await pool.fetch(
         """SELECT * FROM energy.disruption_signals
            WHERE expires_at > NOW()
@@ -490,22 +503,39 @@ async def get_impact_feed(
                     END DESC,
                     created_at DESC
            LIMIT $1""",
-        limit,
+        fetch_limit,
     )
 
     engine = CorridorRiskEngine(pool)
-    items = []
+    groups: dict[tuple[Any, Any], dict[str, Any]] = {}
     for r in rows:
         explanation = await engine.explain_signal(_row_to_dict(r))
-        items.append({
+        group_key = (explanation.get("matched_corridor"), r["created_at"].date())
+        candidate = {
             "signal_uuid": str(r["uuid"]),
             "title": r["title"],
             "severity": r["severity"],
             "risk_dimension": r["risk_dimension"],
             "source": r["source"],
             "detected_at": r["created_at"].isoformat(),
+            "based_on_signals": 1,
             **explanation,
-        })
+        }
+        existing = groups.get(group_key)
+        if existing is None:
+            groups[group_key] = candidate
+        else:
+            existing["based_on_signals"] += 1
+            if _SEVERITY_RANK.get(r["severity"], 0) > _SEVERITY_RANK.get(existing["severity"], 0):
+                # keep the count, swap in the higher-severity signal as the representative
+                candidate["based_on_signals"] = existing["based_on_signals"]
+                groups[group_key] = candidate
+
+    items = sorted(
+        groups.values(),
+        key=lambda it: (_SEVERITY_RANK.get(it["severity"], 0), it["detected_at"]),
+        reverse=True,
+    )[:limit]
 
     return {
         "items": items,

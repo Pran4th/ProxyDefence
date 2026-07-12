@@ -17,6 +17,12 @@ const severityTone: Record<string, string> = {
   critical: "text-destructive",
 };
 
+function probabilityBarTone(p: number): string {
+  if (p >= 0.7) return "bg-destructive";
+  if (p >= 0.45) return "bg-warning";
+  return "bg-success";
+}
+
 /** Renders only when the article genuinely qualified as a real disruption
  * signal (real threat score + real energy-entity match, via
  * ArticleSignalIngestor) -- silent for articles with nothing to say,
@@ -58,6 +64,19 @@ export default function ArticleMarketImpact({ articleId }: { articleId: number }
               )}
             </div>
             <p className="text-sm leading-relaxed text-foreground/90">{s.reasoning}</p>
+            {s.corridor_probability_30d != null && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-1 w-20 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full ${probabilityBarTone(s.corridor_probability_30d)}`}
+                    style={{ width: `${Math.round(s.corridor_probability_30d * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  {Math.round(s.corridor_probability_30d * 100)}% 30-day corridor disruption probability
+                </span>
+              </div>
+            )}
             {s.estimated_exposure_usd != null && (
               <p className="mt-2 text-sm font-semibold text-warning">
                 Estimated exposure: {fmtUsd(s.estimated_exposure_usd)}

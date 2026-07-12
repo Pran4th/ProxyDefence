@@ -684,7 +684,18 @@ class ArticleSignalIngestor(DataIngestor):
     LOOKBACK_HOURS = 24 * 14
     ARTICLE_SCAN_LIMIT = 150
     MAX_ENTITIES_PER_ARTICLE = 3
-    SIGNAL_TTL_HOURS = 72
+    # Was a flat 72 for every signal regardless of severity -- one of the
+    # inputs to corridor_risk.py's exposure formula that never actually
+    # varied, contributing to the Market Impact Feed's repetitive-looking
+    # dollar figures. A more severe disruption plausibly stays relevant
+    # longer, so scale the window with severity instead.
+    SIGNAL_TTL_HOURS_BY_SEVERITY = {
+        "low": 24,
+        "moderate": 48,
+        "elevated": 72,
+        "high": 96,
+        "critical": 120,
+    }
 
     TOPIC_TO_DIMENSION = {
         "war": "geopolitical",
@@ -772,7 +783,7 @@ class ArticleSignalIngestor(DataIngestor):
                     "affected_regions": regions,
                     "confidence": float(r["confidence"] or 0.7),
                     "evidence_urls": [r["url"]] if r["url"] else [],
-                    "ttl_hours": self.SIGNAL_TTL_HOURS,
+                    "ttl_hours": self.SIGNAL_TTL_HOURS_BY_SEVERITY.get(severity, 72),
                 })
                 created += 1
             except Exception as exc:
