@@ -1128,3 +1128,34 @@ export const fetchSPRHealth = async () => {
   const response = await api.get("/api/v1/intelligence/procurement/spr/health");
   return response.data;
 };
+export interface PublicCorridorRisk {
+  key: string;
+  name: string;
+  probability_30d: number;
+  india_import_share_pct: number;
+  drivers: { title: string; severity: string }[];
+}
+
+export const fetchPublicCorridorRisk = async (): Promise<{ corridors: PublicCorridorRisk[] }> => {
+  const response = await api.get("/public/corridor-risk");
+  return response.data;
+};
+
+export interface SandboxScenario {
+  uuid: string;
+  scenario_name: string;
+  scenario_description: string;
+  severity: string;
+  supply_gap_bpd: number;
+  max_supply_gap_bpd: number;
+  economic_impact_usd: number;
+  gdp_impact_pct: number;
+  max_ticks: number;
+  execution_time_ms: number;
+  created_at: string;
+}
+
+export const fetchSandboxScenarios = async (): Promise<{ scenarios: SandboxScenario[] }> => {
+  const response = await api.get("/public/sandbox-scenarios");
+  return response.data;
+};

@@ -15,6 +15,8 @@ import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchPublicPreview, type PublicPreview, type PublicPreviewArticle } from "@/lib/api";
+import PublicCorridorPreview from "@/components/PublicCorridorPreview";
+import ScenarioSandbox from "@/components/ScenarioSandbox";
 import heroBg from "@/assets/hero-bg.png";
 
 type Severity = "low" | "medium" | "high" | "critical";
@@ -268,6 +270,9 @@ const Landing = () => {
               </span>
             </div>
             <SignalStrip metrics={metrics} />
+            <div className="mt-4 border-t border-border pt-4">
+              <PublicCorridorPreview />
+            </div>
             {!loading && stats && (
               <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground">
                 Backed by <span className="font-semibold text-foreground">{stats.trained_models}</span> trained ML models across{" "}
@@ -301,6 +306,16 @@ const Landing = () => {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="pb-20">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <div className="mb-6 text-center">
+            <p className="font-mono text-xs uppercase tracking-[0.35em] text-primary">Play with it</p>
+            <h2 className="font-display text-3xl font-semibold">See the engine work, before you sign up</h2>
+          </div>
+          <ScenarioSandbox />
         </div>
       </section>
 

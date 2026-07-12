@@ -6,12 +6,16 @@ authenticated-only fields.
 """
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from backend.api.articles.repository import ArticleRepository
 from backend.api_service.rate_limit import limiter
+from backend.shared.settings import settings
 
 router = APIRouter(prefix="/public", tags=["Public Preview"])
+
+ENERGY_BASE = settings.ENERGY_SERVICE_URL.rstrip("/")
 
 
 @router.get("/preview")
@@ -75,3 +79,44 @@ async def get_public_article(request: Request, article_id: int) -> dict[str, Any
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
     return article
+
+
+@router.get("/corridor-risk")
+@limiter.limit("20/minute")
+async def get_public_corridor_risk(request: Request) -> dict[str, Any]:
+    """Anonymous-safe live corridor probabilities for the landing page --
+    aggregate risk numbers, nothing user-specific, so this is a real slice
+    of the product rather than a static mockup for pre-signup visitors."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{ENERGY_BASE}/api/v1/intelligence/corridors")
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="Corridor risk temporarily unavailable")
+
+
+@router.get("/sandbox-scenarios")
+@limiter.limit("20/minute")
+async def get_sandbox_scenarios(request: Request) -> dict[str, Any]:
+    """Real, already-computed digital-twin runs (one per distinct scenario
+    template) for anonymous visitors to browse -- genuine engine output,
+    not a mockup, but read-only so it costs nothing to serve regardless of
+    how many anonymous visitors click through."""
+    pool = request.app.state.pg_pool
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT ON (ss.name)
+                dtr.uuid, ss.name AS scenario_name, ss.description AS scenario_description,
+                ss.severity, dtr.supply_gap_bpd, dtr.max_supply_gap_bpd,
+                dtr.economic_impact_usd, dtr.gdp_impact_pct, dtr.max_ticks,
+                dtr.execution_time_ms, dtr.created_at
+            FROM energy.digital_twin_runs dtr
+            JOIN energy.simulation_scenarios ss ON ss.id = dtr.scenario_id
+            WHERE dtr.status = 'completed' AND ss.is_template = true
+            ORDER BY ss.name, dtr.created_at DESC
+            LIMIT 6
+            """
+        )
+    return {"scenarios": [dict(r) for r in rows]}
