@@ -247,3 +247,21 @@ export async function fetchAisPositions(): Promise<{
   const { data } = await api.get(`${BASE}/ais/positions`);
   return data;
 }
+
+// ── Signal reasoning ("why is this high") ────────────────────────────────
+
+export interface SignalExplanation {
+  signal_uuid: string;
+  reasoning: string;
+  matched_corridor: string | null;
+  corridor_name: string | null;
+  corridor_probability_30d: number | null;
+  india_import_share_pct: number | null;
+  estimated_exposure_usd: number | null;
+  assumptions: { name: string; value: unknown; source: string; how_to_test: string }[];
+}
+
+export async function fetchSignalExplanation(signalUuid: string): Promise<SignalExplanation> {
+  const { data } = await api.get(`${BASE}/signals/${signalUuid}/explain`);
+  return data;
+}

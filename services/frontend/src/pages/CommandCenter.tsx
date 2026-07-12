@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import CorridorRiskStrip from "@/components/CorridorRiskStrip";
+import SignalWhy from "@/components/SignalWhy";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -176,6 +177,7 @@ export default function CommandCenter() {
                     Respond
                   </Button>
                 </div>
+                <SignalWhy signalUuid={s.uuid} />
               </div>
             ))}
           </CardContent>

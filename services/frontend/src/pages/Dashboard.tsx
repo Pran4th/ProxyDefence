@@ -358,7 +358,7 @@ const Dashboard = () => {
       <div className="mt-5 grid gap-5 lg:grid-cols-4">
         <MetricTile
           title="Avg risk level"
-          value={`${Math.round((stats?.average_risk_score ?? 0) * 100)}%`}
+          value={`${Math.round(stats?.average_risk_score ?? 0)}%`}
           icon={BarChart3}
           trend="neutral"
           trendValue="Average risk across all tracked events"

@@ -382,3 +382,108 @@ class CorridorRiskEngine:
             "blend": "0.6·own_risk + 0.4·max corridor probability over supplier's routes",
             "computed_at": corridor_result["computed_at"],
         }
+
+    # ── Per-signal reasoning ("why is this high") ────────────────────────────
+
+    async def _live_brent_usd_bbl(self) -> float:
+        row = await self.pool.fetchrow(
+            """SELECT price FROM energy.commodity_prices
+               WHERE commodity_name ILIKE '%brent%'
+               ORDER BY recorded_at DESC LIMIT 1"""
+        )
+        return float(row["price"]) if row and row["price"] else 85.0
+
+    async def _national_demand_bpd(self) -> float:
+        val = await self.pool.fetchval(
+            "SELECT SUM(daily_demand_bpd) FROM energy.demand_profiles WHERE is_active = true"
+        )
+        return float(val) if val else 9_700_000.0  # last-known India total, fallback only
+
+    async def explain_signal(self, signal: dict[str, Any]) -> dict[str, Any]:
+        """Plain-language reasoning plus a rough, assumption-labeled economic
+        exposure estimate for ONE signal -- the same corridor definitions and
+        severity scale used by compute_all(), just applied to a single
+        article-derived signal instead of aggregated across all of them.
+        Not a new model: an application of the existing one at signal grain.
+        """
+        text = f"{signal.get('title') or ''} {signal.get('description') or ''}".lower()
+        matched_key = None
+        for key, cfg in CORRIDORS.items():
+            if any(kw in text for kw in cfg["keywords"]):
+                matched_key = key
+                break
+
+        severity_score = SEVERITY_SCORE.get(signal.get("severity"), 0.3)
+        confidence = float(signal.get("confidence") or 0.7)
+
+        corridor_name = None
+        corridor_probability = None
+        india_share_pct = None
+        if matched_key:
+            all_corridors = await self.compute_all()
+            match = next(
+                (c for c in all_corridors["corridors"] if c["key"] == matched_key), None
+            )
+            if match:
+                corridor_name = match["name"]
+                corridor_probability = match["probability_30d"]
+                india_share_pct = match["india_import_share_pct"]
+
+        exposure_usd = None
+        if india_share_pct:
+            brent = await self._live_brent_usd_bbl()
+            national_demand_bpd = await self._national_demand_bpd()
+            daily_import_value_usd = national_demand_bpd * brent
+            ttl_hours = float(signal.get("ttl_hours") or 72)
+            exposure_usd = round(
+                daily_import_value_usd
+                * (india_share_pct / 100)
+                * severity_score
+                * confidence
+                * (ttl_hours / 24),
+                0,
+            )
+
+        regions = signal.get("affected_regions") or []
+        commodities = signal.get("affected_commodities") or []
+
+        parts = []
+        if corridor_name:
+            parts.append(
+                f"This ties to the {corridor_name} corridor, currently at "
+                f"{round((corridor_probability or 0) * 100)}% 30-day disruption "
+                f"probability"
+                + (f" and {india_share_pct}% of India's crude imports." if india_share_pct else ".")
+            )
+        if regions:
+            parts.append(f"Affected regions: {', '.join(regions[:4])}.")
+        if commodities:
+            parts.append(f"Commodities in play: {', '.join(commodities[:4])}.")
+        if exposure_usd:
+            parts.append(
+                f"Rough exposure if this holds for the signal's {int(signal.get('ttl_hours') or 72)}h "
+                f"window: ${exposure_usd / 1e6:,.0f}M of India's crude import value at risk "
+                f"(severity- and confidence-weighted, not a guaranteed loss)."
+            )
+        if not parts:
+            parts.append(
+                "No corridor or India-import match found for this signal yet -- "
+                "shown as a general risk signal without a scoped estimate."
+            )
+
+        return {
+            "reasoning": " ".join(parts),
+            "matched_corridor": matched_key,
+            "corridor_name": corridor_name,
+            "corridor_probability_30d": corridor_probability,
+            "india_import_share_pct": india_share_pct,
+            "estimated_exposure_usd": exposure_usd,
+            "assumptions": [
+                {
+                    "name": "exposure_formula",
+                    "value": "national_demand_bpd × live_brent × india_share × severity × confidence × (ttl_hours/24)",
+                    "source": "Derived from live energy.demand_profiles + live Brent, same pattern as digital_twin/flow.py",
+                    "how_to_test": "Compare against the digital twin's full scenario run for the same event",
+                },
+            ],
+        }

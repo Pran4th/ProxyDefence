@@ -29,6 +29,7 @@ import {
 import AppShell from "@/components/AppShell";
 import MetricCard from "@/components/MetricCard";
 import CorridorRiskStrip from "@/components/CorridorRiskStrip";
+import SignalWhy from "@/components/SignalWhy";
 import {
   Card,
   CardContent,
@@ -338,6 +339,7 @@ const RiskDashboardPage = () => {
                         </Badge>
                       ))}
                     </div>
+                    <SignalWhy signalUuid={signal.uuid} />
                   </div>
                 </div>
               ))}

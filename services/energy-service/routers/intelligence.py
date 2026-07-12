@@ -98,6 +98,28 @@ async def get_signal(
     return _row_to_dict(row)
 
 
+@router.get("/signals/{signal_uuid}/explain")
+async def explain_signal(
+    signal_uuid: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Plain-language reasoning + a rough, assumption-labeled economic
+    exposure estimate for one signal -- the "why is this high" the
+    dashboard shows only a severity badge for today."""
+    from services.corridor_risk import CorridorRiskEngine
+
+    row = await pool.fetchrow(
+        "SELECT * FROM energy.disruption_signals WHERE uuid = $1::uuid",
+        signal_uuid,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    engine = CorridorRiskEngine(pool)
+    explanation = await engine.explain_signal(_row_to_dict(row))
+    return {"signal_uuid": signal_uuid, **explanation}
+
+
 # ── Risk scores ─────────────────────────────────────────────────────────────
 
 
