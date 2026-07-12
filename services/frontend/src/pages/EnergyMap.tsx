@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Map as MapIcon, Layers, Anchor, Droplets, Factory, Pipette, Zap, Warehouse, Building2, Ship, Waypoints, Fuel, AlertTriangle } from "lucide-react";
 
 import AppShell from "@/components/AppShell";
 import { fetchEntities } from "@/lib/api-energy";
+import { fetchRunImpacts } from "@/lib/api";
+import { fetchAisPositions, fetchCorridorRisk } from "@/lib/api-intelligence";
 import { Button } from "@/components/ui/button";
 
 type AssetEntry = {
@@ -84,6 +87,8 @@ const toGeoJSON = (assets: AssetEntry[]): GeoJSON.FeatureCollection => ({
 
 const EnergyMap = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const runUuid = searchParams.get("run_uuid");
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -93,6 +98,23 @@ const EnergyMap = () => {
     Object.fromEntries(TABLE_LIST.map((t) => [t, true]))
   );
   const [selectedAsset, setSelectedAsset] = useState<AssetEntry | null>(null);
+
+  // Live corridor risk (drives corridor line color) and real AIS vessels
+  const { data: corridorData } = useQuery({
+    queryKey: ["map-corridors"],
+    queryFn: fetchCorridorRisk,
+    refetchInterval: 30000,
+  });
+  const { data: aisData } = useQuery({
+    queryKey: ["map-ais"],
+    queryFn: fetchAisPositions,
+    refetchInterval: 30000,
+  });
+  const { data: runImpacts } = useQuery({
+    queryKey: ["map-run-impacts", runUuid],
+    queryFn: () => fetchRunImpacts(runUuid!),
+    enabled: !!runUuid,
+  });
 
   // load assets from energy-service
   useEffect(() => {
@@ -160,6 +182,84 @@ const EnergyMap = () => {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
     map.on("load", () => {
+      const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+      // Corridor polylines, color-interpolated by live disruption probability
+      map.addSource("corridors", { type: "geojson", data: empty });
+      map.addLayer({
+        id: "corridor-lines-glow",
+        type: "line",
+        source: "corridors",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-width": 10,
+          "line-blur": 6,
+          "line-opacity": 0.35,
+          "line-color": [
+            "interpolate", ["linear"], ["get", "probability"],
+            0, "#22c55e", 0.45, "#f59e0b", 0.7, "#ef4444",
+          ],
+        },
+      });
+      map.addLayer({
+        id: "corridor-lines",
+        type: "line",
+        source: "corridors",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-width": ["interpolate", ["linear"], ["get", "indiaShare"], 0, 1.5, 50, 5],
+          "line-opacity": 0.9,
+          "line-color": [
+            "interpolate", ["linear"], ["get", "probability"],
+            0, "#22c55e", 0.45, "#f59e0b", 0.7, "#ef4444",
+          ],
+          "line-dasharray": [2, 1],
+        },
+      });
+      map.addLayer({
+        id: "corridor-labels",
+        type: "symbol",
+        source: "corridors",
+        layout: {
+          "symbol-placement": "line-center",
+          "text-field": ["concat", ["get", "name"], "  ", ["get", "probabilityLabel"]],
+          "text-size": 10,
+        },
+        paint: {
+          "text-color": "#e2e8f0",
+          "text-halo-color": "#0a1628",
+          "text-halo-width": 1.5,
+        },
+      });
+
+      // Real AIS vessel positions
+      map.addSource("vessels", { type: "geojson", data: empty });
+      map.addLayer({
+        id: "vessel-points",
+        type: "circle",
+        source: "vessels",
+        paint: {
+          "circle-radius": 3.5,
+          "circle-color": "#22d3ee",
+          "circle-opacity": 0.95,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#0a1628",
+        },
+      });
+      map.addLayer({
+        id: "vessel-labels",
+        type: "symbol",
+        source: "vessels",
+        minzoom: 6,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 9,
+          "text-offset": [0, 1],
+          "text-anchor": "top",
+        },
+        paint: { "text-color": "#67e8f9", "text-halo-color": "#0a1628", "text-halo-width": 1 },
+      });
+
       map.addSource("assets", { type: "geojson", data: toGeoJSON([]) });
 
       map.addLayer({
@@ -233,12 +333,71 @@ const EnergyMap = () => {
     return () => { map.off("click", "asset-points", onClick); };
   }, [filteredAssets, mapReady]);
 
+  // Push live corridor risk into the corridor line source
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !corridorData) return;
+    const source = map.getSource("corridors") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData({
+      type: "FeatureCollection",
+      features: corridorData.corridors.map((c) => ({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: c.polyline },
+        properties: {
+          name: c.name.split("(")[0].trim(),
+          probability: c.probability_30d,
+          probabilityLabel: `${Math.round(c.probability_30d * 100)}%`,
+          indiaShare: c.india_import_share_pct,
+        },
+      })),
+    });
+  }, [corridorData, mapReady]);
+
+  // Push real AIS vessels into the vessel source
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !aisData) return;
+    const source = map.getSource("vessels") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData({
+      type: "FeatureCollection",
+      features: aisData.items.map((v) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [v.longitude, v.latitude] },
+        properties: { name: v.name, chokepoint: v.chokepoint },
+      })),
+    });
+  }, [aisData, mapReady]);
+
+  // Scenario mode: pulse chokepoints while a run's impact overlay is active
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !runUuid) return;
+    let up = true;
+    const pulse = setInterval(() => {
+      if (!map.getLayer("asset-points")) return;
+      up = !up;
+      map.setPaintProperty("asset-points", "circle-stroke-width", [
+        "case", ["==", ["get", "isChokepoint"], 1], up ? 6 : 2, 0.5,
+      ]);
+    }, 600);
+    return () => {
+      clearInterval(pulse);
+      if (map.getLayer("asset-points")) {
+        map.setPaintProperty("asset-points", "circle-stroke-width", [
+          "case", ["==", ["get", "isChokepoint"], 1], 2, 0.5,
+        ]);
+      }
+    };
+  }, [runUuid, mapReady]);
+
   const toggleLayer = (type: string) => {
     setActiveLayers((prev) => ({ ...prev, [type]: !prev[type] }));
   };
 
   return (
-    <AppShell title="Energy Asset Map" subtitle="Geospatial visualization of global energy infrastructure">
+    <AppShell title="Energy Supply Map" subtitle="India's import corridors, live corridor risk, and real AIS tanker traffic">
       <div className="flex flex-col gap-4 lg:flex-row">
         <div className="w-full lg:w-64 shrink-0">
           <div className="rounded-2xl border border-border bg-card p-4">
@@ -272,9 +431,17 @@ const EnergyMap = () => {
               })}
             </div>
 
-            <div className="mt-4 border-t border-border pt-3">
+            <div className="mt-4 space-y-1.5 border-t border-border pt-3">
               <p className="text-xs text-muted-foreground">
                 {filteredAssets.length} / {assets.length} assets visible
+              </p>
+              <p className="text-xs text-muted-foreground">
+                <span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#22d3ee]" />
+                {aisData?.total ?? 0} live AIS vessels
+                {aisData?.snapshot_at ? ` · ${aisData.snapshot_at.slice(0, 16)}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Corridor lines colored by live 30-day disruption probability
               </p>
             </div>
           </div>
@@ -287,6 +454,25 @@ const EnergyMap = () => {
             {loading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0a1628]/70 text-sm text-muted-foreground">
                 Loading energy assets...
+              </div>
+            )}
+
+            {runUuid && (
+              <div className="absolute left-4 top-4 z-10 max-w-sm rounded-2xl border border-destructive/50 bg-card/95 p-3 shadow-lg">
+                <p className="text-xs font-semibold text-destructive">
+                  Scenario impact overlay active
+                </p>
+                {runImpacts?.aggregate_impacts ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Supply gap{" "}
+                    {((runImpacts.aggregate_impacts.max_supply_gap_bpd ??
+                      runImpacts.aggregate_impacts.supply_gap_bpd ?? 0) / 1e6).toFixed(1)}
+                    M bpd · GDP impact {runImpacts.aggregate_impacts.gdp_impact_pct ?? 0}% ·{" "}
+                    {runImpacts.aggregate_impacts.idle_refineries ?? 0} refineries idle
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-muted-foreground">Loading run impacts…</p>
+                )}
               </div>
             )}
 

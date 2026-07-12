@@ -435,6 +435,45 @@ async def list_supplier_risk(
     return await engine.supplier_risk()
 
 
+@router.get("/ais/positions")
+async def list_ais_positions() -> dict[str, Any]:
+    """Latest real AISstream vessel positions near monitored chokepoints,
+    served from the ml-platform-ingested snapshot for the map overlay."""
+    import csv
+    import json as json_mod
+
+    from backend.shared.paths import project_root
+
+    path = project_root() / "datasets" / "processed" / "ais-chokepoints" / "ais-chokepoints.csv"
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+    except OSError:
+        return {"items": [], "total": 0, "snapshot_at": None}
+
+    items = []
+    latest = None
+    for r in rows:
+        try:
+            attrs = json_mod.loads(r.get("attributes") or "{}")
+        except json_mod.JSONDecodeError:
+            attrs = {}
+        ts = (r.get("timestamp") or "")[:19]
+        if latest is None or ts > latest:
+            latest = ts
+        items.append({
+            "mmsi": r.get("entity_id"),
+            "name": r.get("entity_name"),
+            "latitude": float(r["latitude"]),
+            "longitude": float(r["longitude"]),
+            "chokepoint": r.get("location_name"),
+            "speed_knots": attrs.get("speed_over_ground_knots"),
+            "heading": attrs.get("true_heading"),
+            "timestamp": ts,
+        })
+    return {"items": items, "total": len(items), "snapshot_at": latest}
+
+
 # ── Knowledge Graph Risk Propagation ────────────────────────────────────────
 
 

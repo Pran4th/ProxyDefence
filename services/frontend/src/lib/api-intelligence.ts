@@ -225,3 +225,25 @@ export async function fetchResponseTelemetry(): Promise<{
   const { data } = await api.get(`${BASE}/command/telemetry`);
   return data;
 }
+
+// ── AIS vessel positions (real AISstream snapshot) ──────────────────────
+
+export interface AisVessel {
+  mmsi: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  chokepoint: string;
+  speed_knots: number | null;
+  heading: number | null;
+  timestamp: string;
+}
+
+export async function fetchAisPositions(): Promise<{
+  items: AisVessel[];
+  total: number;
+  snapshot_at: string | null;
+}> {
+  const { data } = await api.get(`${BASE}/ais/positions`);
+  return data;
+}
