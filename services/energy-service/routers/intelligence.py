@@ -431,6 +431,40 @@ async def get_entity_risk_profile(
     }
 
 
+@router.get("/articles/{article_id}/impact")
+async def get_article_impact(
+    article_id: int,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Real market-impact reasoning for one article -- reuses whatever
+    disruption_signals ArticleSignalIngestor already derived from it (real
+    threat score + real energy-entity match), so an article only shows
+    impact data when it genuinely qualified for one; no fabricated numbers
+    for articles the pipeline didn't match to anything real."""
+    from services.corridor_risk import CorridorRiskEngine
+
+    rows = await pool.fetch(
+        """SELECT * FROM energy.disruption_signals
+           WHERE source = $1 ORDER BY confidence DESC LIMIT 3""",
+        f"article:{article_id}",
+    )
+    if not rows:
+        return {"has_impact_data": False, "signals": []}
+
+    engine = CorridorRiskEngine(pool)
+    signals = []
+    for r in rows:
+        explanation = await engine.explain_signal(_row_to_dict(r))
+        signals.append({
+            "signal_uuid": str(r["uuid"]),
+            "affected_entity_type": r["affected_entity_type"],
+            "severity": r["severity"],
+            "risk_dimension": r["risk_dimension"],
+            **explanation,
+        })
+    return {"has_impact_data": True, "signals": signals}
+
+
 # ── Corridor & supplier disruption probability ──────────────────────────────
 
 

@@ -4,6 +4,7 @@ import { ArrowLeft, Globe2, AlertTriangle, Clock, ExternalLink, Lock } from "luc
 
 import AppShell from "@/components/AppShell";
 import EnergyContextSection from "@/components/EnergyContextSection";
+import ArticleMarketImpact from "@/components/ArticleMarketImpact";
 import { fetchArticle, fetchArticleEntities, fetchPublicArticle, type Article, type PublicArticleSummary } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { ThreatBadge } from "@/lib/riskFormat";
@@ -185,6 +186,8 @@ const ArticleDetail = () => {
             <EnergyContextSection energyContext={fullArticle.energy_context} />
           </div>
         )}
+
+        {fullArticle && <ArticleMarketImpact articleId={fullArticle.id} />}
       </div>
     </AppShell>
   );

@@ -265,3 +265,20 @@ export async function fetchSignalExplanation(signalUuid: string): Promise<Signal
   const { data } = await api.get(`${BASE}/signals/${signalUuid}/explain`);
   return data;
 }
+
+// ── Article market impact ────────────────────────────────────────────────
+
+export interface ArticleImpact {
+  has_impact_data: boolean;
+  signals: (SignalExplanation & {
+    signal_uuid: string;
+    affected_entity_type: string | null;
+    severity: string;
+    risk_dimension: string;
+  })[];
+}
+
+export async function fetchArticleImpact(articleId: number): Promise<ArticleImpact> {
+  const { data } = await api.get(`${BASE}/articles/${articleId}/impact`);
+  return data;
+}
