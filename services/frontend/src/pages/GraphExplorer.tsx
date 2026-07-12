@@ -22,7 +22,7 @@ type GraphEdge = {
 };
 
 type GraphPayload = {
-  nodes: GraphNode[];
+  nodes: (GraphNode & { country?: string | null })[];
   edges: GraphEdge[];
   node_count?: number;
   edge_count?: number;
@@ -65,6 +65,7 @@ type TooltipState = {
   y: number;
   label: string;
   entityType: string;
+  country: string | null;
   degree: number;
 } | null;
 
@@ -102,6 +103,18 @@ const GraphExplorer = () => {
           if (s && t) seenEdges.add(`${s}|${t}`);
         });
 
+        // entity_relationships only stores type:id pairs -- source_name/
+        // source_country (and target_ equivalents) are resolved server-side in
+        // relationships.py's get_network_graph by joining each entity to its
+        // real catalog row + energy.locations. Country is baked directly into
+        // the node label (not just a hover tooltip) since the whole point is
+        // to see at a glance which country each node belongs to.
+        const displayLabel = (name: string | null | undefined, country: string | null | undefined, fallback: string) => {
+          if (!name) return fallback;
+          if (country && country !== name) return `${name} (${country})`;
+          return name;
+        };
+
         for (const rel of (energyData.relationships || [])) {
           const sourceLabel = `${rel.source_entity_type}:${rel.source_entity_id}`;
           const targetLabel = `${rel.target_entity_type}:${rel.target_entity_id}`;
@@ -109,11 +122,23 @@ const GraphExplorer = () => {
           seenEdges.add(`${sourceLabel}|${targetLabel}`);
 
           if (!existingNodeIds.has(sourceLabel)) {
-            merged.nodes.push({ id: sourceLabel, label: sourceLabel, group: rel.source_entity_type, val: 10 });
+            merged.nodes.push({
+              id: sourceLabel,
+              label: displayLabel(rel.source_name, rel.source_country, sourceLabel),
+              group: rel.source_entity_type,
+              country: rel.source_country,
+              val: 10,
+            });
             existingNodeIds.add(sourceLabel);
           }
           if (!existingNodeIds.has(targetLabel)) {
-            merged.nodes.push({ id: targetLabel, label: targetLabel, group: rel.target_entity_type, val: 10 });
+            merged.nodes.push({
+              id: targetLabel,
+              label: displayLabel(rel.target_name, rel.target_country, targetLabel),
+              group: rel.target_entity_type,
+              country: rel.target_country,
+              val: 10,
+            });
             existingNodeIds.add(targetLabel);
           }
 
@@ -157,14 +182,14 @@ const GraphExplorer = () => {
   }, []);
 
   const { elements: allElements, typeCounts } = useMemo(() => {
-    const nodes = new Map<string, { data: { id: string; label: string; entityType: string; degree: number } }>();
+    const nodes = new Map<string, { data: { id: string; label: string; entityType: string; country: string | null; degree: number } }>();
     const edges: { data: { id: string; source: string; target: string; label: string; confidence: number } }[] = [];
     const degree = new Map<string, number>();
 
-    const ensureNode = (id: string, label: string, entityType: string | undefined) => {
+    const ensureNode = (id: string, label: string, entityType: string | undefined, country?: string | null) => {
       if (!nodes.has(id)) {
         nodes.set(id, {
-          data: { id, label, entityType: (entityType || "actor").toLowerCase(), degree: 0 },
+          data: { id, label, entityType: (entityType || "actor").toLowerCase(), country: country ?? null, degree: 0 },
         });
       }
     };
@@ -172,7 +197,7 @@ const GraphExplorer = () => {
     graph.nodes.forEach((node) => {
       const id = node.id || node.label;
       if (!id) return;
-      ensureNode(id, node.label || id, node.group);
+      ensureNode(id, node.label || id, node.group, node.country);
     });
 
     graph.edges.forEach((edge, index) => {
@@ -374,6 +399,7 @@ const GraphExplorer = () => {
                       y: pos.y,
                       label: n.data("label"),
                       entityType: n.data("entityType"),
+                      country: n.data("country"),
                       degree: n.data("degree"),
                     });
                   });
@@ -449,7 +475,8 @@ const GraphExplorer = () => {
                       className="h-1.5 w-1.5 rounded-full"
                       style={{ backgroundColor: colorFor(tooltip.entityType) }}
                     />
-                    {labelFor(tooltip.entityType)} · {tooltip.degree} connection{tooltip.degree === 1 ? "" : "s"}
+                    {labelFor(tooltip.entityType)}
+                    {tooltip.country ? ` · ${tooltip.country}` : ""} · {tooltip.degree} connection{tooltip.degree === 1 ? "" : "s"}
                   </p>
                 </div>
               )}

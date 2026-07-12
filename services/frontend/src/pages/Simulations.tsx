@@ -159,11 +159,19 @@ export default function Simulations() {
   });
 
   const handleRunSimulation = useCallback(async () => {
+    if (!selectedScenario) {
+      toast({
+        title: "Select a scenario first",
+        description: "A simulation without a scenario just runs the baseline network with no disruption applied — pick one from the list above.",
+        variant: "destructive",
+      });
+      return;
+    }
     const scenario = scenariosQuery.data?.items?.find(
       (s: SimulationScenario) => s.uuid === selectedScenario
     );
     const result = await runSimMutation.mutateAsync({
-      scenario_uuid: selectedScenario || undefined,
+      scenario_uuid: selectedScenario,
       name: simName || scenario?.name || "Simulation Run",
       max_ticks: simDuration[0],
       tick_interval: "day",
@@ -173,7 +181,7 @@ export default function Simulations() {
       setSelectedRun(result.run_uuid);
       setActiveTab("results");
     }
-  }, [selectedScenario, simName, simDuration, scenariosQuery.data, runSimMutation]);
+  }, [selectedScenario, simName, simDuration, scenariosQuery.data, runSimMutation, toast]);
 
   const health = healthQuery.data;
   const network = networkQuery.data;
@@ -311,11 +319,13 @@ export default function Simulations() {
                 </div>
                 <Button
                   onClick={handleRunSimulation}
-                  disabled={runSimMutation.isPending}
+                  disabled={runSimMutation.isPending || !selectedScenario}
                   className="w-full"
                 >
                   {runSimMutation.isPending ? (
                     <>Running Simulation...</>
+                  ) : !selectedScenario ? (
+                    <>Select a scenario to run</>
                   ) : (
                     <>
                       <Play className="h-4 w-4 mr-2" />

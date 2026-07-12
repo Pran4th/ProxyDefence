@@ -312,12 +312,12 @@ class ProcurementOrchestrator:
                 "severity": "info",
                 "category": "supplier_strategy",
                 "financial_impact": {
-                    "recommended_cost_bbl": recommended["cost_bbl"] if recommended else 0,
-                    "recommended_annual_cost": recommended["total_annual_cost_usd"] if recommended else 0,
+                    "recommended_cost_bbl": recommended["cost_bbl"],
+                    "recommended_annual_cost": recommended["total_annual_cost_usd"],
                 },
                 "operational_impact": {
                     "pareto_options": len(pareto),
-                    "recommended_volume_bpd": recommended["volume_bpd"] if recommended else 0,
+                    "recommended_volume_bpd": recommended["volume_bpd"],
                 },
                 "strategic_importance": 0.85,
                 "confidence": 0.75,
@@ -326,6 +326,29 @@ class ProcurementOrchestrator:
                     f"Contract {recommended['supplier_name']} for {recommended['volume_bpd']:,.0f} bpd",
                     f"Negotiate {recommended.get('lead_time_days', 30)}-day delivery terms",
                     "File RFQ for remaining volume across 3 backup suppliers" if len(options) > 1 else "Negotiate exclusive supply agreement",
+                ],
+            } if recommended else {
+                # opt_result["recommended"] is None whenever no option survives
+                # the cost/risk/lead-time filters (e.g. the default
+                # max_cost_bbl=100 vs unenriched suppliers' higher computed
+                # cost) -- this used to crash the whole /run call with an
+                # unhandled TypeError from subscripting None.
+                "title": f"No Viable Supplier Found — {name}",
+                "summary": (
+                    f"{len(options)} option(s) were evaluated but none satisfied the given "
+                    "cost, risk, and lead-time constraints. Try relaxing max_cost_bbl, "
+                    "max_risk_score, or max_lead_days and re-running."
+                ),
+                "severity": "warning",
+                "category": "supplier_strategy",
+                "financial_impact": {"recommended_cost_bbl": 0, "recommended_annual_cost": 0},
+                "operational_impact": {"pareto_options": len(pareto), "recommended_volume_bpd": 0},
+                "strategic_importance": 0.85,
+                "confidence": 0.75,
+                "time_horizon": "short_term",
+                "recommended_actions": [
+                    "Relax max_cost_bbl or max_risk_score and re-run the optimizer",
+                    "Enrich supplier_intelligence (OFAC/GDELT signals) to sharpen risk scoring",
                 ],
             },
         ]
