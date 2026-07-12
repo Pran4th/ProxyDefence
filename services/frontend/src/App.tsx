@@ -30,6 +30,7 @@ const Investigations = lazy(() => import("./pages/Investigations"));
 const RiskDashboard = lazy(() => import("./pages/RiskDashboard"));
 const Procurement = lazy(() => import("./pages/Procurement"));
 const SPR = lazy(() => import("./pages/SPR"));
+const CommandCenter = lazy(() => import("./pages/CommandCenter"));
 const queryClient = new QueryClient();
 
 const RouteLoader = () => (
@@ -144,6 +145,14 @@ const App = () => (
                   element={(
                     <ProtectedRoute>
                       <Investigations />
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/command"
+                  element={(
+                    <ProtectedRoute>
+                      <CommandCenter />
                     </ProtectedRoute>
                   )}
                 />

@@ -171,3 +171,57 @@ export async function fetchSupplierRisk(): Promise<{ items: SupplierRisk[]; tota
   const { data } = await api.get(`${BASE}/suppliers/risk`);
   return data;
 }
+
+// ── Command Center (signal → decision golden thread) ────────────────────
+
+export interface CommandResponseBundle {
+  signal: DisruptionSignal;
+  scenario: { uuid: string; name: string; severity: string };
+  twin_run: {
+    run_uuid: string;
+    ticks_executed: number;
+    execution_time_ms: number;
+    aggregate_impacts: Record<string, number>;
+  };
+  spr_run: Record<string, unknown>;
+  procurement_run: Record<string, unknown>;
+  telemetry: {
+    uuid: string;
+    signal_detected_at: string;
+    analysis_started_at: string;
+    analysis_completed_at: string;
+    recommendation_generated_at: string;
+    total_latency_seconds: number;
+    pipeline_latency_seconds: number;
+  };
+}
+
+export async function respondToSignal(body: {
+  signal_uuid?: string;
+  auto?: boolean;
+}): Promise<CommandResponseBundle> {
+  const { data } = await api.post(`${BASE}/command/respond`, body, {
+    timeout: 180000,
+  });
+  return data;
+}
+
+export interface ResponseTelemetryEntry {
+  uuid: string;
+  signal_title: string | null;
+  signal_severity: string | null;
+  signal_detected_at: string;
+  analysis_started_at: string;
+  recommendation_generated_at: string;
+  total_latency_seconds: number;
+}
+
+export async function fetchResponseTelemetry(): Promise<{
+  items: ResponseTelemetryEntry[];
+  total: number;
+  pipeline_latency_p50_seconds: number | null;
+  pipeline_latency_p95_seconds: number | null;
+}> {
+  const { data } = await api.get(`${BASE}/command/telemetry`);
+  return data;
+}

@@ -5,6 +5,7 @@ import {
   BarChart3,
   Cpu,
   CalendarDays,
+  Crosshair,
   LogOut,
   Settings,
   Shield,
@@ -24,6 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import Logo from "@/components/Logo";
 
 const navItems = [
+  { to: "/command", label: "Command Center", icon: Crosshair },
   { to: "/dashboard", label: "Dashboard", icon: Activity },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/simulations", label: "Simulations", icon: Cpu },
