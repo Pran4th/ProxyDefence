@@ -1,18 +1,392 @@
 [
-  {"slug": "jamnagar", "name": "Jamnagar Refinery", "capacity_bpd": 1240000, "nelson_complexity_index": 14.0, "crude_types_accepted": ["arab_light", "arab_heavy", "basrah", "iranian_heavy"], "output_products": ["gasoline", "diesel", "jet_fuel", "naphtha", "petcoke"], "latitude": 22.3000, "longitude": 69.7000, "location_slug": "india", "org_slug": "reliance-industries", "importance": 100, "criticality": "critical"},
-  {"slug": "paraguaná", "name": "Paraguaná Refinery Complex", "capacity_bpd": 955000, "nelson_complexity_index": 12.5, "crude_types_accepted": ["venezuelan_heavy", "boscán"], "output_products": ["gasoline", "diesel", "fuel_oil", "asphalt"], "latitude": 11.7500, "longitude": -70.0000, "location_slug": "venezuela", "org_slug": "pdvsa", "importance": 85, "criticality": "critical"},
-  {"slug": "ras-tanura-refinery", "name": "Ras Tanura Refinery", "capacity_bpd": 550000, "nelson_complexity_index": 10.0, "crude_types_accepted": ["arab_light", "arab_heavy"], "output_products": ["gasoline", "diesel", "jet_fuel", "fuel_oil"], "latitude": 26.6500, "longitude": 50.1500, "location_slug": "saudi-arabia", "org_slug": "saudi-aramco", "importance": 90, "criticality": "critical"},
-  {"slug": "baton-rouge", "name": "Baton Rouge Refinery", "capacity_bpd": 503000, "nelson_complexity_index": 11.0, "latitude": 30.4500, "longitude": -91.1500, "location_slug": "united-states", "org_slug": "exxonmobil", "importance": 80, "criticality": "high"},
-  {"slug": "port-arthur", "name": "Port Arthur Refinery", "capacity_bpd": 470000, "nelson_complexity_index": 12.0, "latitude": 29.8900, "longitude": -93.9400, "location_slug": "united-states", "org_slug": "shell", "importance": 80, "criticality": "high"},
-  {"slug": "joann", "name": "Ruwais Refinery", "capacity_bpd": 817000, "nelson_complexity_index": 13.0, "latitude": 24.1500, "longitude": 52.7000, "location_slug": "uae", "org_slug": "adnoc", "importance": 90, "criticality": "critical"},
-  {"slug": "singapore-refinery", "name": "Pulau Bukom Refinery", "capacity_bpd": 500000, "nelson_complexity_index": 9.5, "latitude": 1.2000, "longitude": 103.7500, "location_slug": "singapore", "org_slug": "shell", "importance": 85, "criticality": "high"},
-  {"slug": "yantai", "name": "Yantai Refinery", "capacity_bpd": 400000, "nelson_complexity_index": 8.5, "latitude": 37.4600, "longitude": 121.4500, "location_slug": "china", "org_slug": "sinopec", "importance": 80, "criticality": "high"},
-  {"slug": "dalian", "name": "Dalian Refinery", "capacity_bpd": 410000, "nelson_complexity_index": 8.0, "latitude": 38.9000, "longitude": 121.6000, "location_slug": "china", "org_slug": "cnpc", "importance": 80, "criticality": "high"},
-  {"slug": "bina", "name": "Bina Refinery", "capacity_bpd": 600000, "nelson_complexity_index": 11.0, "latitude": 23.3000, "longitude": 80.0000, "location_slug": "india", "org_slug": "ongc", "importance": 75, "criticality": "high"},
-  {"slug": "pernis", "name": "Pernis Refinery", "capacity_bpd": 400000, "nelson_complexity_index": 10.5, "latitude": 51.9000, "longitude": 4.5000, "location_slug": "netherlands", "org_slug": "shell", "importance": 85, "criticality": "critical"},
-  {"slug": "rotterdam-refinery", "name": "Botlek Refinery", "capacity_bpd": 350000, "latitude": 51.8800, "longitude": 4.3000, "location_slug": "netherlands", "org_slug": "bp", "importance": 80, "criticality": "high"},
-  {"slug": "tuapse", "name": "Tuapse Refinery", "capacity_bpd": 240000, "latitude": 44.1000, "longitude": 39.0800, "location_slug": "russia", "org_slug": "rosneft", "importance": 70, "criticality": "medium"},
-  {"slug": "al-seef", "name": "Al Seef Refinery", "capacity_bpd": 200000, "latitude": 23.0000, "longitude": 50.0000, "location_slug": "kuwait", "org_slug": "kpc", "importance": 75, "criticality": "high"},
-  {"slug": "paulista", "name": "Paulista Refinery (REPLAN)", "capacity_bpd": 450000, "nelson_complexity_index": 9.0, "latitude": -22.7500, "longitude": -47.3300, "location_slug": "brazil", "org_slug": "petrobras", "importance": 80, "criticality": "high"},
-  {"slug": "bonny-ref", "name": "Port Harcourt Refinery", "capacity_bpd": 210000, "latitude": 4.7500, "longitude": 7.0000, "location_slug": "nigeria", "org_slug": "nnpc", "importance": 75, "criticality": "high"}
+  {
+    "slug": "jamnagar",
+    "name": "Jamnagar Refinery",
+    "capacity_bpd": 1240000,
+    "nelson_complexity_index": 14.0,
+    "crude_types_accepted": [
+      "arab_light",
+      "arab_heavy",
+      "basrah",
+      "iranian_heavy"
+    ],
+    "output_products": [
+      "gasoline",
+      "diesel",
+      "jet_fuel",
+      "naphtha",
+      "petcoke"
+    ],
+    "latitude": 22.3,
+    "longitude": 69.7,
+    "location_slug": "india",
+    "org_slug": "reliance-industries",
+    "importance": 100,
+    "criticality": "critical"
+  },
+  {
+    "slug": "paraguan\u00c3\u00a1",
+    "name": "Paraguan\u00c3\u00a1 Refinery Complex",
+    "capacity_bpd": 955000,
+    "nelson_complexity_index": 12.5,
+    "crude_types_accepted": [
+      "venezuelan_heavy",
+      "bosc\u00c3\u00a1n"
+    ],
+    "output_products": [
+      "gasoline",
+      "diesel",
+      "fuel_oil",
+      "asphalt"
+    ],
+    "latitude": 11.75,
+    "longitude": -70.0,
+    "location_slug": "venezuela",
+    "org_slug": "pdvsa",
+    "importance": 85,
+    "criticality": "critical"
+  },
+  {
+    "slug": "ras-tanura-refinery",
+    "name": "Ras Tanura Refinery",
+    "capacity_bpd": 550000,
+    "nelson_complexity_index": 10.0,
+    "crude_types_accepted": [
+      "arab_light",
+      "arab_heavy"
+    ],
+    "output_products": [
+      "gasoline",
+      "diesel",
+      "jet_fuel",
+      "fuel_oil"
+    ],
+    "latitude": 26.65,
+    "longitude": 50.15,
+    "location_slug": "saudi-arabia",
+    "org_slug": "saudi-aramco",
+    "importance": 90,
+    "criticality": "critical"
+  },
+  {
+    "slug": "baton-rouge",
+    "name": "Baton Rouge Refinery",
+    "capacity_bpd": 503000,
+    "nelson_complexity_index": 11.0,
+    "latitude": 30.45,
+    "longitude": -91.15,
+    "location_slug": "united-states",
+    "org_slug": "exxonmobil",
+    "importance": 80,
+    "criticality": "high"
+  },
+  {
+    "slug": "port-arthur",
+    "name": "Port Arthur Refinery",
+    "capacity_bpd": 470000,
+    "nelson_complexity_index": 12.0,
+    "latitude": 29.89,
+    "longitude": -93.94,
+    "location_slug": "united-states",
+    "org_slug": "shell",
+    "importance": 80,
+    "criticality": "high"
+  },
+  {
+    "slug": "joann",
+    "name": "Ruwais Refinery",
+    "capacity_bpd": 817000,
+    "nelson_complexity_index": 13.0,
+    "latitude": 24.15,
+    "longitude": 52.7,
+    "location_slug": "uae",
+    "org_slug": "adnoc",
+    "importance": 90,
+    "criticality": "critical"
+  },
+  {
+    "slug": "singapore-refinery",
+    "name": "Pulau Bukom Refinery",
+    "capacity_bpd": 500000,
+    "nelson_complexity_index": 9.5,
+    "latitude": 1.2,
+    "longitude": 103.75,
+    "location_slug": "singapore",
+    "org_slug": "shell",
+    "importance": 85,
+    "criticality": "high"
+  },
+  {
+    "slug": "yantai",
+    "name": "Yantai Refinery",
+    "capacity_bpd": 400000,
+    "nelson_complexity_index": 8.5,
+    "latitude": 37.46,
+    "longitude": 121.45,
+    "location_slug": "china",
+    "org_slug": "sinopec",
+    "importance": 80,
+    "criticality": "high"
+  },
+  {
+    "slug": "dalian",
+    "name": "Dalian Refinery",
+    "capacity_bpd": 410000,
+    "nelson_complexity_index": 8.0,
+    "latitude": 38.9,
+    "longitude": 121.6,
+    "location_slug": "china",
+    "org_slug": "cnpc",
+    "importance": 80,
+    "criticality": "high"
+  },
+  {
+    "slug": "bina",
+    "name": "Bina Refinery",
+    "capacity_bpd": 600000,
+    "nelson_complexity_index": 11.0,
+    "latitude": 23.3,
+    "longitude": 80.0,
+    "location_slug": "india",
+    "org_slug": "ongc",
+    "importance": 75,
+    "criticality": "high"
+  },
+  {
+    "slug": "pernis",
+    "name": "Pernis Refinery",
+    "capacity_bpd": 400000,
+    "nelson_complexity_index": 10.5,
+    "latitude": 51.9,
+    "longitude": 4.5,
+    "location_slug": "netherlands",
+    "org_slug": "shell",
+    "importance": 85,
+    "criticality": "critical"
+  },
+  {
+    "slug": "rotterdam-refinery",
+    "name": "Botlek Refinery",
+    "capacity_bpd": 350000,
+    "latitude": 51.88,
+    "longitude": 4.3,
+    "location_slug": "netherlands",
+    "org_slug": "bp",
+    "importance": 80,
+    "criticality": "high"
+  },
+  {
+    "slug": "tuapse",
+    "name": "Tuapse Refinery",
+    "capacity_bpd": 240000,
+    "latitude": 44.1,
+    "longitude": 39.08,
+    "location_slug": "russia",
+    "org_slug": "rosneft",
+    "importance": 70,
+    "criticality": "medium"
+  },
+  {
+    "slug": "al-seef",
+    "name": "Al Seef Refinery",
+    "capacity_bpd": 200000,
+    "latitude": 23.0,
+    "longitude": 50.0,
+    "location_slug": "kuwait",
+    "org_slug": "kpc",
+    "importance": 75,
+    "criticality": "high"
+  },
+  {
+    "slug": "paulista",
+    "name": "Paulista Refinery (REPLAN)",
+    "capacity_bpd": 450000,
+    "nelson_complexity_index": 9.0,
+    "latitude": -22.75,
+    "longitude": -47.33,
+    "location_slug": "brazil",
+    "org_slug": "petrobras",
+    "importance": 80,
+    "criticality": "high"
+  },
+  {
+    "slug": "bonny-ref",
+    "name": "Port Harcourt Refinery",
+    "capacity_bpd": 210000,
+    "latitude": 4.75,
+    "longitude": 7.0,
+    "location_slug": "nigeria",
+    "org_slug": "nnpc",
+    "importance": 75,
+    "criticality": "high"
+  },
+  {
+    "slug": "panipat",
+    "name": "IOCL Panipat Refinery",
+    "capacity_bpd": 300000,
+    "nelson_complexity_index": 10.5,
+    "crude_types_accepted": [
+      "light_sweet",
+      "medium_sour"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "petrochemicals"
+    ],
+    "latitude": 29.4359,
+    "longitude": 76.9853,
+    "location_slug": "india",
+    "org_slug": "iocl",
+    "importance": 85,
+    "criticality": "high"
+  },
+  {
+    "slug": "koyali",
+    "name": "IOCL Gujarat (Koyali) Refinery",
+    "capacity_bpd": 274000,
+    "nelson_complexity_index": 9.1,
+    "crude_types_accepted": [
+      "light_sweet",
+      "medium_sour"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "lpg"
+    ],
+    "latitude": 22.3746,
+    "longitude": 73.1136,
+    "location_slug": "india",
+    "org_slug": "iocl",
+    "importance": 82,
+    "criticality": "high"
+  },
+  {
+    "slug": "paradip",
+    "name": "IOCL Paradip Refinery",
+    "capacity_bpd": 300000,
+    "nelson_complexity_index": 12.2,
+    "crude_types_accepted": [
+      "heavy_sour",
+      "medium_sour"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "petrochemicals"
+    ],
+    "latitude": 20.2648,
+    "longitude": 86.6947,
+    "location_slug": "india",
+    "org_slug": "iocl",
+    "importance": 84,
+    "criticality": "high"
+  },
+  {
+    "slug": "mumbai-bpcl",
+    "name": "BPCL Mumbai Refinery",
+    "capacity_bpd": 240000,
+    "nelson_complexity_index": 8.3,
+    "crude_types_accepted": [
+      "light_sweet",
+      "medium_sour"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "jet_fuel"
+    ],
+    "latitude": 19.033,
+    "longitude": 72.9214,
+    "location_slug": "india",
+    "org_slug": "bpcl",
+    "importance": 80,
+    "criticality": "high"
+  },
+  {
+    "slug": "kochi",
+    "name": "BPCL Kochi Refinery",
+    "capacity_bpd": 310000,
+    "nelson_complexity_index": 10.8,
+    "crude_types_accepted": [
+      "heavy_sour",
+      "medium_sour"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "petrochemicals"
+    ],
+    "latitude": 9.9312,
+    "longitude": 76.3213,
+    "location_slug": "india",
+    "org_slug": "bpcl",
+    "importance": 83,
+    "criticality": "high"
+  },
+  {
+    "slug": "visakh",
+    "name": "HPCL Visakh Refinery",
+    "capacity_bpd": 300000,
+    "nelson_complexity_index": 9.5,
+    "crude_types_accepted": [
+      "medium_sour",
+      "heavy_sour"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "lpg"
+    ],
+    "latitude": 17.6868,
+    "longitude": 83.2185,
+    "location_slug": "india",
+    "org_slug": "hpcl",
+    "importance": 82,
+    "criticality": "high"
+  },
+  {
+    "slug": "chennai-cpcl",
+    "name": "CPCL Chennai Refinery",
+    "capacity_bpd": 210000,
+    "nelson_complexity_index": 8.9,
+    "crude_types_accepted": [
+      "light_sweet",
+      "medium_sour"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "lubes"
+    ],
+    "latitude": 13.1425,
+    "longitude": 80.2574,
+    "location_slug": "india",
+    "org_slug": "iocl",
+    "importance": 78,
+    "criticality": "medium"
+  },
+  {
+    "slug": "vadinar",
+    "name": "Nayara Vadinar Refinery",
+    "capacity_bpd": 400000,
+    "nelson_complexity_index": 11.8,
+    "crude_types_accepted": [
+      "heavy_sour",
+      "medium_sour",
+      "light_sweet"
+    ],
+    "output_products": [
+      "diesel",
+      "gasoline",
+      "petrochemicals"
+    ],
+    "latitude": 22.3705,
+    "longitude": 69.7047,
+    "location_slug": "india",
+    "org_slug": "nayara",
+    "importance": 86,
+    "criticality": "high"
+  }
 ]

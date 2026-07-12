@@ -62,7 +62,7 @@ const AppShell = ({
               <div className="leading-tight">
                 <p className="font-display text-lg tracking-tight text-foreground">ProxyDefence</p>
                 <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                  Intelligence Core
+                  Resilience Core
                 </p>
               </div>
             </Link>
@@ -121,7 +121,7 @@ const AppShell = ({
           <header className="border-b border-border bg-background/80 backdrop-blur">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
               <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Threat Intelligence Workspace</p>
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Energy Resilience Command</p>
                 <h1 className="text-3xl font-bold">{title}</h1>
                 <p className="text-sm text-muted-foreground">{subtitle}</p>
               </div>

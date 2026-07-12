@@ -1,17 +1,20 @@
 # ProxyDefence
 
-Military-grade cyber defense intelligence platform with event-driven microservices architecture. Ingests news → processes via ML/NLP → stores in PostgreSQL + Elasticsearch → serves to a React frontend via FastAPI.
+AI-driven energy supply-chain resilience platform for import-dependent economies, starting with India. Turns live geopolitical signals into executable decisions: news is ingested → ML-scored into disruption signals → corridor risk probabilities → digital-twin scenario impacts → SPR drawdown and procurement recommendations, end to end in under a minute — with every stage's latency measured and persisted.
+
+Event-driven microservices: news → Kafka → ML enrichment → PostgreSQL/Elasticsearch → FastAPI gateway → React command center.
 
 ## Architecture
 
 ```
-GNews API → ingest-service → Kafka (raw_articles)
-                          → ml-service → Kafka (processed_articles)
-                                         → database-service → PostgreSQL + Elasticsearch
-                                                              → modular-api → Frontend
+GNews/NewsData → ingest-service → Kafka (raw_articles)
+                               → ml-platform consumer → Kafka (processed_articles)
+                                              → database-service → PostgreSQL + Elasticsearch
+                                                                   → modular-api → Frontend
 
-Energy Service (port 8006) → PostgreSQL (energy schema)
-ML Platform (port 8007)    → PostgreSQL (ml schema) → prediction API
+Energy Service (port 8006) → risk engine · corridor risk · digital twin · SPR · procurement
+                           → Response Orchestrator (signal → recommendation, telemetry-tracked)
+ML Platform (port 8007)    → 5 trained models over ~330k real records → prediction API
 ```
 
 ### Service Ports
@@ -61,8 +64,7 @@ scripts/dev/backend/start-ingest.ps1
 
 | Service | Role |
 |---------|------|
-| **ingest-service** (8001) | Fetches news from GNews API, publishes to Kafka |
-| **ml-service** (8002) | NLP processing (sentiment, entities, topics, threats) |
+| **ingest-service** (8001) | Fetches news from GNews/NewsData APIs, publishes to Kafka |
 | **database-service** (8003) | Kafka consumer → PostgreSQL + Elasticsearch |
 | **embedding-service** (8005) | Kafka consumer → pgvector |
 | **modular-api** (8000) | REST gateway with 15 domain routers, AI Copilot, RAG |
@@ -73,11 +75,12 @@ scripts/dev/backend/start-ingest.ps1
 
 | Document | Contents |
 |----------|----------|
-| `docs/ARCHITECTURE.md` | Full architecture reference (15 parts, 12 sequence diagrams) |
-| `docs/AI_ARCHITECTURE.md` | AI Copilot agent architecture (Supervisor/Intelligence, RAG, reasoning, confidence) |
-| `docs/DATABASE_GUIDE.md` | Schema documentation (7 schemas, 75+ tables) |
-| `docs/LOCAL_DEVELOPMENT.md` | Development setup walkthrough |
-| `docs/SERVICE_GUIDE.md` | Per-service configuration details |
+| `docs/01_LOCAL_SETUP.md` | Development setup walkthrough |
+| `docs/02_ARCHITECTURE.md` | Architecture reference |
+| `docs/03_DEVELOPMENT_WORKFLOW.md` | Day-to-day dev workflow |
+| `docs/04_DEBUGGING.md` | Debugging guide |
+| `docs/05_DEPLOYMENT.md` | Deployment guide |
+| `docs/06_ENVIRONMENT_VARIABLES.md` | Environment variable reference |
 
 ## Stack
 

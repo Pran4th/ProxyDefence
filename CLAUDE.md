@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ProxyDefence is a military-grade cyber defense intelligence platform with an event-driven microservices architecture. Data flows through a Kafka pipeline: news is ingested → processed by ML/NLP → stored in PostgreSQL and Elasticsearch → served to the React frontend via FastAPI.
+ProxyDefence is an AI-driven energy supply-chain resilience platform for import-dependent economies (India-first). It turns live geopolitical signals into executable decisions: news → ML-scored disruption signals → corridor risk probabilities → digital-twin scenario impacts → SPR drawdown + procurement recommendations, chained by a Response Orchestrator whose per-stage latency is persisted to `energy.response_telemetry`. Event-driven microservices: news is ingested → processed by ML/NLP → stored in PostgreSQL and Elasticsearch → served to the React frontend (Command Center at `/command`) via FastAPI.
 
 ## Architecture
 

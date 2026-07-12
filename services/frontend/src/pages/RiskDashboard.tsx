@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -14,7 +14,6 @@ import {
   Shield,
   Ship,
   TrendingUp,
-  Warehouse,
   Zap,
 } from "lucide-react";
 import {
@@ -41,8 +40,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   fetchRiskDashboard,
   fetchCommodityPrices,
-  fetchPortCongestion,
-  fetchTankerAvailability,
+  fetchAisPositions,
+  type AisVessel,
   fetchSignals,
   evaluateScenario,
 } from "@/lib/api-intelligence";
@@ -84,8 +83,8 @@ const RiskDashboardPage = () => {
   const [signals, setSignals] = useState<DisruptionSignal[]>([]);
   const [loading, setLoading] = useState(true);
   const [prices, setPrices] = useState<any[]>([]);
-  const [congestion, setCongestion] = useState<any[]>([]);
-  const [tankers, setTankers] = useState<any[]>([]);
+  const [aisVessels, setAisVessels] = useState<AisVessel[]>([]);
+  const [aisSnapshotAt, setAisSnapshotAt] = useState<string | null>(null);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [scenarioName, setScenarioName] = useState("Hormuz Closure");
   const [scenarioDesc, setScenarioDesc] = useState("Strait of Hormuz blocked for 2 weeks");
@@ -95,18 +94,17 @@ const RiskDashboardPage = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [dash, sigs, priceData, congData, tankData] = await Promise.all([
+      const [dash, sigs, priceData, aisData] = await Promise.all([
         fetchRiskDashboard(),
         fetchSignals({ limit: 10 }),
         fetchCommodityPrices({ limit: 10 }),
-        fetchPortCongestion({ limit: 10 }),
-        fetchTankerAvailability({ limit: 10 }),
+        fetchAisPositions(),
       ]);
       setDashboard(dash);
       setSignals(sigs.items);
       setPrices(priceData.items);
-      setCongestion(congData.items);
-      setTankers(tankData.items);
+      setAisVessels(aisData.items);
+      setAisSnapshotAt(aisData.snapshot_at);
     } catch (err) {
       console.error("Failed to load risk dashboard", err);
     } finally {
@@ -117,6 +115,16 @@ const RiskDashboardPage = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const chokepointTraffic = useMemo(() => {
+    const groups = new Map<string, AisVessel[]>();
+    for (const v of aisVessels) {
+      const list = groups.get(v.chokepoint) ?? [];
+      list.push(v);
+      groups.set(v.chokepoint, list);
+    }
+    return [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+  }, [aisVessels]);
 
   const handleScenarioEvaluate = async () => {
     setScenarioRunning(true);
@@ -212,8 +220,8 @@ const RiskDashboardPage = () => {
           variant="default"
         />
         <MetricCard
-          title="Ports Monitored"
-          value={congestion.length + tankers.length}
+          title="Live AIS Vessels"
+          value={aisVessels.length}
           icon={Ship}
           variant="default"
         />
@@ -386,101 +394,52 @@ const RiskDashboardPage = () => {
           </CardContent>
         </Card>
 
-        {/* Port Congestion */}
-        <Card className="rounded-[1.75rem] border-border bg-card shadow-elevation">
+        {/* Chokepoint Tanker Traffic (real AIS) */}
+        <Card className="rounded-[1.75rem] border-border bg-card shadow-elevation lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <Ship className="h-4 w-4 text-warning" />
-              Port Congestion
+            <CardTitle className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2">
+                <Ship className="h-4 w-4 text-warning" />
+                Chokepoint Tanker Traffic
+              </span>
+              <span className="text-[10px] font-normal text-muted-foreground">
+                live AISstream{aisSnapshotAt ? ` · ${aisSnapshotAt.slice(0, 16)}` : ""}
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {congestion.length === 0 ? (
+            {chokepointTraffic.length === 0 ? (
               <p className="py-4 text-center text-xs text-muted-foreground">
-                Not yet connected to a live AIS/port data feed.
+                No vessels in the current AIS snapshot.
               </p>
             ) : (
-            <div className="space-y-2">
-              {congestion.map((c: any) => (
-                <div
-                  key={c.uuid}
-                  className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2"
-                >
-                  <div>
-                    <p className="text-xs font-medium">{c.port_name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {c.country} · {c.waiting_vessels} vessels waiting
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full ${
-                            c.congestion_pct > 80
-                              ? "bg-destructive"
-                              : c.congestion_pct > 50
-                                ? "bg-warning"
-                                : "bg-success"
-                          }`}
-                          style={{ width: `${c.congestion_pct}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-semibold">
-                        {c.congestion_pct}%
-                      </span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {chokepointTraffic.map(([chokepoint, vessels]) => (
+                  <div
+                    key={chokepoint}
+                    className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2"
+                  >
+                    <div>
+                      <p className="text-xs font-medium capitalize">
+                        {chokepoint.replace(/_/g, " ")}
+                      </p>
+                      <p className="line-clamp-1 text-[10px] text-muted-foreground">
+                        {vessels
+                          .slice(0, 2)
+                          .map((v) => v.name)
+                          .join(", ")}
+                        {vessels.length > 2 ? ` +${vessels.length - 2} more` : ""}
+                      </p>
                     </div>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {vessels.length}
+                      <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                        vessels
+                      </span>
+                    </span>
                   </div>
-                </div>
-              ))}
-            </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Tanker Availability */}
-        <Card className="rounded-[1.75rem] border-border bg-card shadow-elevation">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <Warehouse className="h-4 w-4 text-accent" />
-              Tanker Availability
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {tankers.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                Not yet connected to a live AIS data feed.
-              </p>
-            ) : (
-            <div className="space-y-2">
-              {tankers.map((t: any) => (
-                <div
-                  key={t.uuid}
-                  className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2"
-                >
-                  <div>
-                    <p className="text-xs font-medium">{t.vessel_type}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {t.vessels_available} / {t.total_vessels} available
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold">
-                      ${(t.avg_daily_rate_usd / 1000).toFixed(0)}k/day
-                    </p>
-                    <p
-                      className={`text-[10px] ${
-                        t.utilization_pct > 80
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {t.utilization_pct}% utilized
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

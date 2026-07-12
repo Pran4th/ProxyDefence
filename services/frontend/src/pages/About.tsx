@@ -24,7 +24,7 @@ const About = () => {
           {/* Hero Section */}
           <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
             <h1 className="text-5xl font-bold mb-6 bg-gradient-primary bg-clip-text text-transparent">
-              Defending Digital Infrastructure
+              Securing India's Energy Lifelines
             </h1>
             <p className="text-xl text-muted-foreground">
               ProxyDefence fuses live news ingestion, trained ML models, and multi-source

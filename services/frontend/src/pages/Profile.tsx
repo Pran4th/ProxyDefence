@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Globe, Lock, Shield, User } from "lucide-react";
+import { Bell, Lock, User } from "lucide-react";
 
 import AppShell from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -272,42 +272,6 @@ const Profile = () => {
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              className="mt-4 w-full"
-              disabled
-              title="Access policy review is not yet available"
-            >
-              Review Access Policy (Coming Soon)
-            </Button>
-          </div>
-
-          <div className="rounded-lg border border-primary/30 bg-primary/5 p-6">
-            <Globe className="mb-3 h-8 w-8 text-primary" />
-            <h4 className="mb-2 font-semibold">Location Services</h4>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Tune region-specific monitoring for priority theaters and actors.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              disabled
-              title="Region-specific monitoring configuration is not yet available"
-            >
-              Coming Soon
-            </Button>
-          </div>
-
-          <div className="rounded-lg border border-accent/30 bg-accent/5 p-6">
-            <Shield className="mb-3 h-8 w-8 text-accent" />
-            <h4 className="mb-2 font-semibold">Two-Factor Auth</h4>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Add an extra verification step before granting dashboard access.
-            </p>
-            <Button size="sm" className="w-full" disabled title="Two-factor authentication is not yet available">
-              Coming Soon
-            </Button>
           </div>
         </div>
       </div>

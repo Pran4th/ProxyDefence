@@ -247,7 +247,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
+    const load = () => Promise.all([
       fetchDashboardStats(),
       fetchThreatAnalytics(),
       fetchTopEvents(),
@@ -308,6 +308,10 @@ const Dashboard = () => {
         });
       })
       .finally(() => setLoading(false));
+
+    load();
+    const interval = setInterval(load, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
