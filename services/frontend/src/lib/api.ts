@@ -133,6 +133,7 @@ export interface AuthUser {
   organization?: string | null;
   location?: string | null;
   notification_preferences?: NotificationPreferences;
+  tier?: "free" | "premium";
   created_at: string;
 }
 export interface Event {
@@ -454,6 +455,11 @@ export const updateProfile = async (params: { organization?: string | null; loca
 
 export const updateNotificationPreferences = async (params: NotificationPreferences) => {
   const response = await api.patch<AuthUser>("/auth/me/notifications", params);
+  return response.data;
+};
+
+export const toggleTierBeta = async () => {
+  const response = await api.post<AuthUser>("/auth/me/tier/beta-toggle");
   return response.data;
 };
 

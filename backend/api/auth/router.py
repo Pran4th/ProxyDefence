@@ -13,7 +13,7 @@ from backend.api_service.security import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-_PROFILE_FIELDS = "id, email, username, role, organization, location, notification_preferences, created_at"
+_PROFILE_FIELDS = "id, email, username, role, organization, location, notification_preferences, tier, created_at"
 
 
 def _serialize_user(user: dict) -> dict:
@@ -96,3 +96,21 @@ async def change_password(
     service = AuthService(request.app.state.pg_pool)
     await service.change_password(current_user["id"], payload)
     return {"status": "password updated"}
+
+
+@router.post("/me/tier/beta-toggle")
+@limiter.limit("10/minute")
+async def toggle_tier_beta(request: Request, current_user: dict = Depends(get_current_user)):
+    """Free self-serve tier toggle for the beta -- no billing integration
+    exists (or is planned for this pass), so this is an honest 'try
+    Premium' switch rather than a fake purchase flow. Real payment
+    processing is out of scope here by design."""
+    async with request.app.state.pg_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            f"""UPDATE users SET tier = CASE WHEN tier = 'premium' THEN 'free' ELSE 'premium' END
+                WHERE id = $1 RETURNING {_PROFILE_FIELDS}""",
+            current_user["id"],
+        )
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _serialize_user(user)

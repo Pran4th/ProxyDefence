@@ -91,7 +91,15 @@ export default function CommandCenter() {
         description: `Scenario: ${data.scenario.name}`,
       });
     },
-    onError: (err: Error & { response?: { data?: { detail?: string } } }) => {
+    onError: (err: Error & { response?: { status?: number; data?: { detail?: string } } }) => {
+      if (err.response?.status === 402) {
+        toast({
+          title: "Premium feature",
+          description: "The full response pipeline (signal → scenario → SPR → procurement) requires a Premium account. Upgrade from your Profile page to run it.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Response pipeline failed",
         description: err.response?.data?.detail ?? err.message,

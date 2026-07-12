@@ -120,12 +120,21 @@ export default function Procurement() {
     queryFn: () => fetchExecutiveCards(),
   });
 
-  const mutationErrorToast = (title: string) => (err: any) =>
+  const mutationErrorToast = (title: string) => (err: any) => {
+    if (err?.response?.status === 402) {
+      toast({
+        title: "Premium feature",
+        description: "This action requires a Premium account. Upgrade from your Profile page to run it.",
+        variant: "destructive" as const,
+      });
+      return;
+    }
     toast({
       title,
       description: err?.response?.data?.detail ?? "Could not reach the energy service. Check that it's running.",
       variant: "destructive" as const,
     });
+  };
 
   const enrichMutation = useMutation({
     mutationFn: enrichSuppliers,

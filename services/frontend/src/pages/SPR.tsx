@@ -121,6 +121,14 @@ export default function SPR() {
       toast({ title: "SPR analysis complete", description: "Release plan and recommendations are ready." });
     },
     onError: (err: any) => {
+      if (err?.response?.status === 402) {
+        toast({
+          title: "Premium feature",
+          description: "SPR release-plan analysis requires a Premium account. Upgrade from your Profile page to run it.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "SPR analysis failed",
         description: err?.response?.data?.detail ?? "Could not reach the energy service. Check that it's running.",
