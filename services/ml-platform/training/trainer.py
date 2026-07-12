@@ -58,7 +58,8 @@ class ModelTrainer:
             git_commit=git_commit,
         )
         self._experiment.log_params(self._model.get_params())
-        self._model.fit(X_train, y_train)
+        eval_set = [(X_val, y_val)] if X_val is not None and y_val is not None else None
+        self._model.fit(X_train, y_train, eval_set=eval_set)
 
         elapsed = time.time() - start_time
 

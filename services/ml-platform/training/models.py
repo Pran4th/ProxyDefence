@@ -23,7 +23,10 @@ class BaseModelWrapper(ABC):
     def _create_model(self, **params):
         ...
 
-    def fit(self, X, y):
+    def fit(self, X, y, eval_set=None):
+        # Base implementation ignores eval_set -- most wrappers here (sklearn
+        # LogReg/RF/DecisionTree/Ridge) don't accept it. Only the XGBoost
+        # wrappers below override this to actually use it for early stopping.
         self._model.fit(X, y)
         return self
 
@@ -103,6 +106,16 @@ class XGBoostWrapper(BaseModelWrapper):
         defaults.update(params)
         return XGBClassifier(**defaults)
 
+    def fit(self, X, y, eval_set=None):
+        # eval_set + the constructor's early_stopping_rounds (if set) let
+        # xgboost>=1.6's sklearn API stop each trial once validation stops
+        # improving, instead of always training the full n_estimators.
+        if eval_set is not None:
+            self._model.fit(X, y, eval_set=eval_set, verbose=False)
+        else:
+            self._model.fit(X, y)
+        return self
+
     @property
     def model_type(self) -> str:
         return "xgboost"
@@ -149,6 +162,13 @@ class XGBoostRegressorWrapper(BaseModelWrapper):
         defaults = {"random_state": 42, "n_jobs": -1, "verbosity": 0}
         defaults.update(params)
         return XGBRegressor(**defaults)
+
+    def fit(self, X, y, eval_set=None):
+        if eval_set is not None:
+            self._model.fit(X, y, eval_set=eval_set, verbose=False)
+        else:
+            self._model.fit(X, y)
+        return self
 
     @property
     def model_type(self) -> str:
