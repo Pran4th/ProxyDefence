@@ -92,7 +92,7 @@ const Search = () => {
   return (
     <AppShell
       title="Intelligence Search"
-      subtitle="Search geopolitical events, actors, relationships and intelligence signals."
+      subtitle="Fast keyword lookup across articles, entities, and signals. For a synthesized answer to a broader question, try Copilot instead."
     >
       <div className="rounded-2xl border border-border bg-card p-6">
         <div className="flex flex-col gap-3 sm:flex-row">

@@ -316,6 +316,15 @@ export const queryCopilot = async (
 
   return response.data;
 };
+
+export const saveCopilotAnswerToCase = async (payload: {
+  case_id: number;
+  question: string;
+  answer: CopilotResponse;
+}) => {
+  const response = await api.post("/copilot/save-to-case", payload);
+  return response.data;
+};
 export const queryCopilotStream = (
   question: string,
   onEvent: (event: { type: string; value: unknown }) => void,

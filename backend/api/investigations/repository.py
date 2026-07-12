@@ -94,7 +94,7 @@ class InvestigationRepository:
         return [record_to_dict(row) for row in rows]
 
     async def add_case_item(self, case_id: int, item_type: str, item_id: int) -> dict[str, Any]:
-        allowed_types = {"alert", "event", "article", "entity"}
+        allowed_types = {"alert", "event", "article", "entity", "copilot_message"}
         if item_type not in allowed_types:
             raise ValueError(f"Invalid item_type: {item_type}. Must be one of {allowed_types}")
 
@@ -121,7 +121,7 @@ class InvestigationRepository:
         return {"case_id": case_id, "items": [record_to_dict(row) for row in items]}
 
     async def remove_case_item(self, case_id: int, item_type: str, item_id: int) -> dict[str, Any]:
-        allowed_types = {"alert", "event", "article", "entity"}
+        allowed_types = {"alert", "event", "article", "entity", "copilot_message"}
         if item_type not in allowed_types:
             raise ValueError(f"Invalid item_type: {item_type}. Must be one of {allowed_types}")
 
