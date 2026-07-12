@@ -10,15 +10,12 @@ intel_router = APIRouter(prefix="/api/v1/intelligence", tags=["intelligence"])
 
 ENERGY_BASE = settings.ENERGY_SERVICE_URL.rstrip("/")
 
-# The expensive, high-value engine runs -- gated to Premium. Everything
-# else under /intelligence (signal feed, corridor risk, article impact,
-# read-only dashboards) stays free, matching the plan's free/premium split.
-PREMIUM_PATHS = {
-    "command/respond",
-    "digital-twin/run",
-    "procurement/run",
-    "procurement/spr/analyze",
-}
+# Deliberately empty: the response pipeline, digital twin, and SPR/procurement
+# runs are the core product (and the hackathon judging path), not an add-on --
+# gating them broke live demand for anyone not on the premium tier. Revisit
+# premium/monetization scope once these engines are solid and it's not mid-hackathon.
+# _check_premium below stays wired up so re-adding a path here is a one-line change.
+PREMIUM_PATHS: set[str] = set()
 
 
 async def _check_premium(request: Request) -> None:

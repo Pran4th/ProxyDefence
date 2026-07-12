@@ -67,11 +67,13 @@ import {
   type SimulationScenario,
 } from "@/lib/api";
 import AppShell from "@/components/AppShell";
+import { useToast } from "@/hooks/use-toast";
 
 type TabValue = "overview" | "scenarios" | "results" | "network" | "impacts";
 
 export default function Simulations() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabValue>("overview");
   const [selectedScenario, setSelectedScenario] = useState<string>("");
   const [simDuration, setSimDuration] = useState([30]);
@@ -132,6 +134,13 @@ export default function Simulations() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dt-runs"] });
     },
+    onError: (err: any) => {
+      toast({
+        title: "Simulation run failed",
+        description: err?.response?.data?.detail ?? "Could not reach the energy service. Check that it's running.",
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteRunMutation = useMutation({
@@ -139,6 +148,13 @@ export default function Simulations() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dt-runs"] });
       setSelectedRun(null);
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to delete run",
+        description: err?.response?.data?.detail ?? "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 

@@ -145,23 +145,36 @@ class FlowEngine:
 
         for eid, edge in edge_states.items():
             node_type = edge.get("source_type", "")
-            if config.get("affected_refineries") and "refinery" in node_type:
-                ref_name = edge.get("source_name", "").lower()
-                for aff in config.get("affected_refineries", []):
-                    if aff.lower() in ref_name:
-                        offline_days = config.get("refinery_offline_days", 14)
-                        if tick <= offline_days:
-                            disruptions[eid] = {
-                                "multiplier": 0,
-                                "event": {
-                                    "event_type": "refinery_shutdown",
-                                    "node_id": edge["source_node_id"],
-                                    "tick": tick,
-                                    "description": f"Refinery {edge.get('source_name', '')} offline due to disruption",
-                                    "severity": "critical",
-                                    "impact": {"lost_capacity_bpd": edge.get("current_flow_bpd", 0)},
-                                },
-                            }
+            # Match on BOTH source and target side: a refinery going offline has
+            # to zero its INBOUND crude edges (what supply_gap_bpd is computed
+            # from, since a refinery is the target of those) as well as its
+            # outbound product edges -- matching source-only never touched
+            # inbound flow, so a "shut down" refinery kept reading full inbound
+            # and every scenario looked identical regardless of what it disrupted.
+            if config.get("affected_refineries"):
+                target_match = "refinery" in edge.get("target_type", "") and any(
+                    aff.lower() in edge.get("target_name", "").lower()
+                    for aff in config["affected_refineries"]
+                )
+                source_match = "refinery" in node_type and any(
+                    aff.lower() in edge.get("source_name", "").lower()
+                    for aff in config["affected_refineries"]
+                )
+                if target_match or source_match:
+                    offline_days = config.get("refinery_offline_days", 14)
+                    if tick <= offline_days:
+                        ref_label = edge.get("target_name") if target_match else edge.get("source_name")
+                        disruptions[eid] = {
+                            "multiplier": 0,
+                            "event": {
+                                "event_type": "refinery_shutdown",
+                                "node_id": edge["source_node_id"],
+                                "tick": tick,
+                                "description": f"Refinery {ref_label} offline due to disruption",
+                                "severity": "critical",
+                                "impact": {"lost_capacity_bpd": edge.get("current_flow_bpd", 0)},
+                            },
+                        }
 
             if config.get("affected_ports") and "port" in node_type:
                 port_name = edge.get("source_name", "").lower()
@@ -315,6 +328,12 @@ class FlowEngine:
             "total_days_affected": total_days,
             "assumptions": [
                 {
+                    "name": "refinery_demand_allocation",
+                    "value": "national_demand_bpd × (refinery.capacity_bpd / total_national_refining_capacity_bpd)",
+                    "source": "Analyst-set proxy -- only refineries carry demand; SPRs/ports/pipelines carry none",
+                    "how_to_test": "Compare allocated per-refinery demand against PPAC's published refinery-wise throughput",
+                },
+                {
                     "name": "crude_price_usd_bbl",
                     "value": crude_price_bbl,
                     "source": price_source,
@@ -366,30 +385,61 @@ class FlowEngine:
         return {"edges_updated": updated}
 
     async def snapshot_to_states(self) -> tuple[dict[int, dict], dict[int, dict]]:
-        """Build current node_states and edge_states dicts from the database."""
+        """Build current node_states and edge_states dicts from the database.
+
+        Demand only applies to refineries -- they're the actual crude-consuming
+        nodes in this network; SPRs are reserves and ports/pipelines/storage are
+        pass-through. National demand (energy.demand_profiles, country-level rows
+        only -- the seed also has state-level rows like "India - Gujarat" that no
+        node.country ever matches) is allocated across a country's refineries
+        proportional to each refinery's capacity_bpd share of that country's total
+        refining capacity. Previously every node -- refineries, SPRs, ports, the
+        works -- independently got the full flat national figure, which swamped
+        whatever a scenario actually disrupted and made supply_gap_bpd read as
+        near-constant across runs."""
         nodes = await self.pool.fetch(
-            """SELECT n.*, COALESCE(dp.daily_demand_bpd, 0) as demand_bpd
-               FROM energy.network_nodes n
-               LEFT JOIN energy.demand_profiles dp ON dp.region = n.country AND dp.is_active = true
-               WHERE n.is_deleted = false AND n.is_active = true"""
+            """SELECT * FROM energy.network_nodes
+               WHERE is_deleted = false AND is_active = true"""
         )
+        demand_rows = await self.pool.fetch(
+            "SELECT region, daily_demand_bpd FROM energy.demand_profiles WHERE is_active = true"
+        )
+        national_demand_bpd = {
+            r["region"]: float(r["daily_demand_bpd"])
+            for r in demand_rows
+            if " - " not in r["region"]
+        }
+
+        raw_nodes = {n["id"]: dict(n) for n in nodes}
+        refinery_capacity_by_country: dict[str, float] = {}
+        for node in raw_nodes.values():
+            if node.get("node_type") == "refinery" and node.get("country") in national_demand_bpd:
+                country = node["country"]
+                refinery_capacity_by_country[country] = (
+                    refinery_capacity_by_country.get(country, 0) + (node.get("capacity_bpd") or 0)
+                )
+
         node_states = {}
-        for n in nodes:
-            node = dict(n)
+        for nid, node in raw_nodes.items():
+            demand = 0.0
+            country = node.get("country")
+            if node.get("node_type") == "refinery" and country in national_demand_bpd:
+                total_capacity = refinery_capacity_by_country.get(country) or 0
+                if total_capacity > 0:
+                    demand = national_demand_bpd[country] * ((node.get("capacity_bpd") or 0) / total_capacity)
+            node["demand_bpd"] = round(demand, 2)
             node["status"] = "normal"
             node["inbound_bpd"] = 0
             node["outbound_bpd"] = 0
             node["supply_gap_bpd"] = 0
-            node_states[n["id"]] = node
+            node_states[nid] = node
 
         edges = await self.pool.fetch(
             """SELECT e.*, sn.name as source_name, sn.node_type as source_type,
-                      tn.name as target_name, tn.node_type as target_type,
-                      sr.name as route_name
+                      tn.name as target_name, tn.node_type as target_type
                FROM energy.network_edges e
                JOIN energy.network_nodes sn ON sn.id = e.source_node_id
                JOIN energy.network_nodes tn ON tn.id = e.target_node_id
-               LEFT JOIN energy.shipping_routes sr ON sr.is_deleted = false
                WHERE e.is_deleted = false AND e.is_active = true"""
         )
         edge_states = {}
@@ -397,6 +447,17 @@ class FlowEngine:
             es = dict(e)
             if not es.get("current_flow_bpd") and es.get("max_capacity_bpd"):
                 es["current_flow_bpd"] = es["max_capacity_bpd"] * 0.75
+            # network_edges has no FK to shipping_routes/import_corridors (no
+            # route_id column exists), so there was never a real relationship
+            # to join on -- the previous `LEFT JOIN ... ON sr.is_deleted =
+            # false` had no join condition at all, producing a Cartesian
+            # product that silently corrupted this dict (last-route-wins per
+            # edge id). Use a deterministic per-edge label instead; it won't
+            # match scenario keywords like "suez_canal_transit" since no such
+            # slug exists anywhere in the schema today (a real gap -- see
+            # affected_refineries/affected_ports for the disruption paths that
+            # do work off real column data).
+            es["route_name"] = f"{es.get('source_name', '')} -> {es.get('target_name', '')}"
             edge_states[e["id"]] = es
 
         return node_states, edge_states
