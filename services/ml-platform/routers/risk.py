@@ -48,7 +48,10 @@ async def _load_model(pool: asyncpg.Pool) -> tuple[Any, list[str], asyncpg.Recor
     cache_key = f"{MODEL_NAME}_{mv['version']}"
     if cache_key not in _cache:
         import joblib
-        model_path = Path(mv["file_path"])
+        # file_path is written by training scripts run on the developer's local
+        # OS (Windows), so it may contain backslashes even though this service
+        # can run in a Linux container -- normalize before resolving.
+        model_path = Path(mv["file_path"].replace("\\", "/"))
         feature_names_path = model_path.parent / "feature_names.json"
         _cache[cache_key] = {
             "model": joblib.load(model_path),

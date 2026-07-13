@@ -45,7 +45,9 @@ class ModelPredictor:
             model_path = mv_row["file_path"]
             if not model_path:
                 raise ValueError(f"No file_path for model {cache_key}")
-            self._cache[cache_key] = {"model": joblib.load(model_path)}
+            # file_path may have been written on Windows (backslashes) even
+            # though this service can run in a Linux container.
+            self._cache[cache_key] = {"model": joblib.load(model_path.replace("\\", "/"))}
 
         model = self._cache[cache_key]["model"]
 

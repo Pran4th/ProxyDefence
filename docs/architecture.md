@@ -26,8 +26,8 @@ flowchart LR
     end
 
     subgraph MLP["ML Platform (8007)"]
-        MODELS["5 trained models<br/>disruption-risk AUC 0.734<br/>topic · price · shock · ranker"]
-        PRED["prediction API"]
+        MODELS["5 trained models<br/>disruption-risk AUC 0.746<br/>topic · price · shock · ranker"]
+        PRED["prediction API<br/>(production-flag aware, live reload)"]
     end
 
     subgraph ENERGY["Energy Service (8006)"]
@@ -36,7 +36,7 @@ flowchart LR
         RISK["Risk Engine<br/>ML-blended scores"]
         TWIN["Digital Twin<br/>tick-based network flow<br/>GDP · fuel price · run rates"]
         SPR["SPR Engine<br/>ISPRL Visakh/Mangalore/Padur"]
-        PROC["Procurement Optimizer<br/>Pareto · grade compatibility"]
+        PROC["Procurement Optimizer<br/>Pareto · grade compatibility<br/>+ ML cross-check (ranker)"]
         ORCH["Response Orchestrator<br/>signal → recommendation<br/>⏱ telemetry-tracked"]
     end
 
@@ -94,9 +94,26 @@ recommendation_generated_at, total_latency_seconds).
 ## Corridor disruption probability (the brief's #1 build)
 
 Transparent composite index per corridor (Hormuz, Red Sea/Suez, Cape,
-West Africa, Malacca): 0.40·signal pressure + 0.25·entity ML risk +
-0.20·GDELT instability + 0.15·AIS anomaly → logistic squash. Every
-weight published in an `assumptions[]` block with a how-to-test recipe;
-every driver is a named live signal. India import share per corridor from
-UN Comtrade 2021-24 (Hormuz: 46.5% in 2024).
+West Africa, Malacca): 0.35·signal pressure + 0.20·entity ML risk +
+0.15·GDELT instability + 0.10·AIS anomaly + 0.20·historical anomaly →
+logistic squash. Every weight published in an `assumptions[]` block with
+a how-to-test recipe; every driver is a named live signal. The historical
+anomaly driver is a z-score of today's live signal count against a real
+45-day GDELT event-count baseline for the corridor's partner countries —
+data-driven, not a trained model, and added specifically because the rare
+event this corridor risk is trying to price (a full closure) has no
+labeled history to train a classifier on (see `docs/07_ML_PROCESSES.md`
+§5). India import share per corridor from UN Comtrade 2021-24
+(Hormuz: 46.5% in 2024).
+
+## ML cross-check on procurement
+
+`procurement-option-ranker` (trained XGBoost regressor, val R² 0.246) is
+wired into `procurement/optimizer.py` as a second opinion, not a
+replacement: the deterministic Pareto/composite score stays primary, and
+the ranker's independent prediction is surfaced alongside it as
+`ml_predicted_score` with a `score_divergence` flag when the two disagree
+by more than 0.15. Visible in the Command Center's Procurement tab as the
+"ML Cross-Check" card. Full model inventory and what's genuinely trained
+vs. deterministic-by-design: `docs/07_ML_PROCESSES.md`.
 ```

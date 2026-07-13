@@ -54,13 +54,14 @@ VS Code
 
 ## Production Architecture
 
+Same shape as development, hosted on AWS EC2 (see `docs/05_DEPLOYMENT.md`):
+
 ```
-docker-compose.full.yml
+EC2 (Ubuntu)
     │
-    ├── All services in Docker containers
-    ├── Healthchecks on every service
-    ├── Docker bridge network (proxy_net)
-    └── Volumes for PostgreSQL + Elasticsearch
+    ├── Infra in Docker: docker-compose.yml (PostgreSQL, Kafka, Elasticsearch)
+    ├── Python services in per-service venvs, run as systemd units
+    └── Frontend: static Vite build served by nginx (proxies /api/ → modular-api)
 ```
 
 ## Service Dependencies
