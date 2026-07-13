@@ -187,12 +187,18 @@ Asked directly by the user; the honest answer, not "we ran out of time":
 
 ---
 
-## 7. Known gap (flagged, not yet fixed)
+## 7. Fixed: disruption-score serving now respects the production flag
 
-`ml-platform`'s `/api/v1/risk/disruption-score` serving endpoint loads its model artifact
-from a fixed path keyed by `dataset_version` (always `v1/model.joblib`), not dynamically
-from whichever row is currently marked `stage='production'` in `ml.model_versions`. In
-practice this means "whichever model was trained most recently" is what's actually being
-served, regardless of the DB's production flag — the flag is closer to documentation than a
-real serving switch today. Worth fixing if multiple model versions ever need to coexist or
-be rolled back independently of retraining order.
+Previously `/api/v1/risk/disruption-score` loaded its model artifact from a fixed path
+(`v1/model.joblib`) regardless of which row was marked `stage='production'` in
+`ml.model_versions` — the DB flag was documentation, not a real serving switch.
+
+Fixed: `routers/risk.py::_load_model()` now queries `ml.model_versions` for the current
+production row and loads `file_path` from it directly, mirroring the pattern the generic
+`/api/v1/ml/predict` endpoint (`inference/predictor.py`) already used correctly. Cached by
+`(model_name, version)` so a newly-promoted model is picked up on the next request with no
+process restart needed, and an old cache entry never gets served after a promotion.
+
+Verified live: flipped `stage='production'` from v7 to v6 and back via raw SQL with the
+service running — `model_version` in the response tracked the flag change immediately
+(7 → 6 → 7) with zero restart, proving the fix is real, not just code that looks right.
