@@ -47,6 +47,14 @@ CREATE TABLE IF NOT EXISTS energy.supplier_intelligence (
     typical_volume_bpd          DOUBLE PRECISION,
     spot_premium_bbl            DOUBLE PRECISION DEFAULT 0,
     strategic_value             DOUBLE PRECISION DEFAULT 0.5,
+    -- Raw signals build_procurement_dataset.py already computes from real
+    -- OFAC/GDELT/port-congestion data during --enrich, previously folded
+    -- into sanctions_exposure/compliance_risk/country_political_stability
+    -- and discarded. Persisted here so the trained procurement-option-ranker
+    -- can be called at inference time with the exact features it was trained on.
+    sanction_count               INTEGER,
+    gdelt_escalation_rate        DOUBLE PRECISION,
+    port_congestion_index        DOUBLE PRECISION,
     notes                       TEXT,
     metadata                    JSONB DEFAULT '{}'::jsonb,
     is_deleted                  BOOLEAN DEFAULT FALSE,

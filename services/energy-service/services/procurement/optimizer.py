@@ -2,6 +2,7 @@
 
 import math
 import json
+import os
 import uuid
 from typing import Any
 
@@ -10,6 +11,13 @@ import asyncpg
 from backend.shared.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+ML_PLATFORM_URL = os.getenv("ML_PLATFORM_URL", "http://ml-platform:8007")
+ML_TIMEOUT = 5.0
+# Divergence beyond this, between the deterministic composite score and the
+# trained ranker's independent prediction, gets flagged rather than silently
+# averaged away -- disagreement between the two is the useful signal.
+DIVERGENCE_FLAG_THRESHOLD = 0.15
 
 
 class ProcurementOptimizer:
@@ -41,10 +49,21 @@ class ProcurementOptimizer:
                 "message": "No qualified suppliers found for the given constraints",
             }
 
+        brent = await self._live_brent_usd_bbl()
+
         options = []
         for s in suppliers:
             option = await self._build_option(s, supply_gap_bpd, commodity_uuid, destination_region)
             if option and option["cost_bbl"] <= max_cost_bbl:
+                ml_score = await self._ml_predicted_score(option, s, brent)
+                option["ml_predicted_score"] = ml_score
+                if ml_score is not None:
+                    divergence = round(option["composite_score"] - ml_score, 4)
+                    option["score_divergence"] = divergence
+                    option["scores_diverge"] = abs(divergence) >= DIVERGENCE_FLAG_THRESHOLD
+                else:
+                    option["score_divergence"] = None
+                    option["scores_diverge"] = False
                 options.append(option)
 
         if not options:
@@ -88,6 +107,7 @@ class ProcurementOptimizer:
                       si.on_time_delivery_pct, si.typical_volume_bpd,
                       si.spot_premium_bbl, si.strategic_value,
                       si.sanctions_exposure, si.country_political_stability,
+                      si.sanction_count, si.gdelt_escalation_rate, si.port_congestion_index,
                       l.name as country_name
                FROM energy.suppliers s
                LEFT JOIN energy.supplier_intelligence si ON si.supplier_uuid = s.uuid AND si.is_deleted = false
@@ -99,6 +119,50 @@ class ProcurementOptimizer:
             max_lead_days,
         )
         return rows
+
+    async def _live_brent_usd_bbl(self) -> float:
+        """Same pattern as corridor_risk.py/flow.py's live-Brent lookup."""
+        row = await self.pool.fetchrow(
+            """SELECT price FROM energy.commodity_prices
+               WHERE commodity_name ILIKE '%brent%'
+               ORDER BY recorded_at DESC LIMIT 1"""
+        )
+        return float(row["price"]) if row and row["price"] else 85.0
+
+    async def _ml_predicted_score(
+        self, option: dict[str, Any], supplier: asyncpg.Record, brent: float,
+    ) -> float | None:
+        """Second opinion from the trained procurement-option-ranker -- a
+        genuinely different model (XGBoost, trained on real sanctions/GDELT-
+        escalation/port-congestion signals), not a replacement for the
+        composite formula above. Returns None (not a hard failure) if the ML
+        platform is unreachable, matching ml_bridge.py's fallback philosophy."""
+        try:
+            import httpx
+            features = {
+                "cost_bbl": option["cost_bbl"],
+                "lead_time_days": option["lead_time_days"],
+                "reliability_score": option["reliability"],
+                "on_time_delivery_pct": (supplier.get("on_time_delivery_pct") or 80) / 100.0,
+                "strategic_value": option["strategic_value"],
+                "country_stability_base": supplier.get("country_political_stability") or 0.5,
+                "sanction_count": supplier.get("sanction_count") or 0,
+                "gdelt_escalation_rate": supplier.get("gdelt_escalation_rate") or 0.19,
+                "port_congestion_index": supplier.get("port_congestion_index") or 0.1,
+                "brent_anchor": brent,
+                "stype_international_oil_company": 1 if supplier["supplier_type"] == "international_oil_company" else 0,
+                "stype_national_oil_company": 1 if supplier["supplier_type"] == "national_oil_company" else 0,
+            }
+            async with httpx.AsyncClient(timeout=ML_TIMEOUT) as client:
+                resp = await client.post(
+                    f"{ML_PLATFORM_URL}/api/v1/ml/predict",
+                    json={"model_name": "procurement-option-ranker", "features": features},
+                )
+                if resp.status_code == 200:
+                    return float(resp.json()["prediction"])
+        except Exception as exc:
+            logger.warning("procurement_ranker_unavailable", error=str(exc))
+        return None
 
     async def _build_option(
         self,
