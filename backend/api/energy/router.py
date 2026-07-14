@@ -79,7 +79,13 @@ async def _intel_proxy(request: Request, path: str):
         if k.lower() not in {"host", "content-length"}
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # command/respond chains digital-twin + SPR + procurement and measures
+    # 40-50s end to end -- a flat 30s timeout here made the gateway abort the
+    # upstream call before energy-service finished, which surfaces to the
+    # browser as a bare failed connection (no response headers at all), which
+    # Chrome reports as a misleading CORS error instead of the real timeout.
+    # 170s stays under the frontend axios client's own 180s timeout.
+    async with httpx.AsyncClient(timeout=170.0) as client:
         resp = await client.request(
             method=request.method,
             url=url,
