@@ -132,3 +132,29 @@ class TestSettingsDefaults:
             from backend.shared import settings as settings_module
             importlib.reload(settings_module)
             _ = settings_module.settings
+
+    def test_production_rejects_placeholder_jwt_secret(self, monkeypatch):
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("POSTGRES_USER", "test_user")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "test_pass")
+        monkeypatch.setenv("ELASTICSEARCH_PASSWORD", "test_es_pass")
+        monkeypatch.setenv("JWT_SECRET_KEY", "change-me")
+
+        import importlib
+        from backend.shared import settings as settings_module
+
+        with pytest.raises(RuntimeError, match="JWT_SECRET_KEY"):
+            importlib.reload(settings_module)
+
+    def test_production_accepts_high_entropy_jwt_secret(self, monkeypatch):
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("POSTGRES_USER", "test_user")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "test_pass")
+        monkeypatch.setenv("ELASTICSEARCH_PASSWORD", "test_es_pass")
+        monkeypatch.setenv("JWT_SECRET_KEY", "x" * 48)
+
+        import importlib
+        from backend.shared import settings as settings_module
+
+        importlib.reload(settings_module)
+        assert settings_module.settings.JWT_SECRET_KEY == "x" * 48

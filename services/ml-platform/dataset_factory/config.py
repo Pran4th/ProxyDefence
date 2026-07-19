@@ -61,7 +61,7 @@ class DatasetFactoryConfig:
     export_metadata_json: bool = True
     export_schema_json: bool = True
 
-    energy_service_url: str = os.getenv("ENERGY_SERVICE_URL", "http://energy-service:8000")
+    energy_service_url: str = os.getenv("ENERGY_SERVICE_URL", "http://energy-service:8006")
     kaggle_export: bool = False
     kaggle_metadata_dir: str = os.getenv("DF_KAGGLE_DIR", "./data/kaggle")
 

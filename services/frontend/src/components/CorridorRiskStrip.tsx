@@ -105,7 +105,7 @@ export default function CorridorRiskStrip() {
         <Waves className="h-4 w-4 text-primary" />
         <h3 className="text-sm font-semibold">Corridor Disruption Probability</h3>
         <span className="text-[10px] text-muted-foreground">
-          live · signals + entity risk + GDELT stability + AIS
+          current scored view · signal, entity-risk, stability and AIS inputs
         </span>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-1">

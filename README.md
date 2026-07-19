@@ -1,6 +1,6 @@
 # ProxyDefence
 
-AI-driven energy supply-chain resilience platform for import-dependent economies, starting with India. Turns live geopolitical signals into executable decisions: news is ingested → ML-scored into disruption signals → corridor risk probabilities → digital-twin scenario impacts → SPR drawdown and procurement recommendations, end to end in under a minute — with every stage's latency measured and persisted.
+AI-driven energy supply-chain resilience platform for import-dependent economies, starting with India. It turns geopolitical and logistics inputs into reviewable decision support: news is ingested → ML-scored into disruption signals → corridor risk probabilities → digital-twin scenario impacts → SPR drawdown and procurement recommendations, with each response's latency and evidence persisted.
 
 Event-driven microservices: news → Kafka → ML enrichment → PostgreSQL/Elasticsearch → FastAPI gateway → React command center.
 
@@ -14,7 +14,7 @@ GNews/NewsData → ingest-service → Kafka (raw_articles)
 
 Energy Service (port 8006) → risk engine · corridor risk · digital twin · SPR · procurement
                            → Response Orchestrator (signal → recommendation, telemetry-tracked)
-ML Platform (port 8007)    → 5 trained models over ~330k real records → prediction API
+ML Platform (port 8007)    → trained models over public/derived datasets → prediction API
 ```
 
 ### Service Ports
@@ -24,16 +24,23 @@ ML Platform (port 8007)    → 5 trained models over ~330k real records → pred
 | Frontend (Vite) | 8080 |
 | Modular API | 8000 |
 | Ingest Service | 8001 |
-| ML Service | 8002 |
 | Database Service | 8003 |
 | Embedding Service | 8005 |
 | Energy Service | 8006 |
 | ML Platform | 8007 |
 | Kafka | 9092 |
-| PostgreSQL | 5432 |
+| PostgreSQL | 5434 |
 | Elasticsearch | 9200 |
 
 ## Quick Start
+
+For the reproducible public pilot path, use:
+
+```powershell
+scripts/demo/start-pilot.ps1
+```
+
+For development, start the services individually:
 
 ```powershell
 # 1. One-time setup (Python venvs, spaCy models, dependencies)
@@ -81,6 +88,23 @@ scripts/dev/backend/start-ingest.ps1
 | `docs/04_DEBUGGING.md` | Debugging guide |
 | `docs/05_DEPLOYMENT.md` | Deployment guide |
 | `docs/06_ENVIRONMENT_VARIABLES.md` | Environment variable reference |
+| `docs/08_PILOT_DEMO_RUNBOOK.md` | Reproducible pilot demo and recording runbook |
+| `docs/09_PILOT_PACKAGE.md` | Design-partner and YC positioning package |
+| `docs/10_PUBLIC_DEMO_PROFILE.md` | Public Jamnagar demo profile and source boundaries |
+| `docs/11_CODEBASE_GUIDE.md` | System-level codebase guide and operating model |
+| `docs/12_BUSINESS_CASE.md` | Business problem, demonstrated evidence, and claim boundaries |
+| `docs/13_SECURITY_AND_VALIDATION.md` | Security posture, deployment gates, and validation commands |
+| `docs/14_FOUNDING_ENGINEER_INTERVIEW_PLAYBOOK.md` | Founding-engineer interview preparation tailored to ProxyDefence |
+| `docs/15_HACKATHON_WINNING_PLAYBOOK.md` | Final pitch, demo, judging, video, and Q&A playbook for the energy-resilience challenge |
+
+## Intelligence Source Status
+
+The command center reports the mode and freshness of every decision input.
+`live` means a connector has reported a current observation; `cached` is a
+persisted snapshot; `replay` is a historical evaluation case; and `fallback`
+or `disabled` means the input must not be treated as current intelligence.
+Country-level sanctions aggregation is currently disabled, and AIS is a
+persisted collector snapshot until a continuous connector is deployed.
 
 ## Stack
 

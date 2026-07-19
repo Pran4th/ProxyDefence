@@ -19,4 +19,12 @@ class RequestTrackingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
         response.headers[CORRELATION_ID_HEADER] = correlation_id
+        # Baseline API hardening. The frontend is served separately, so a
+        # restrictive browser Content-Security-Policy belongs at its ingress.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), geolocation=(), microphone=()"
+        )
         return response

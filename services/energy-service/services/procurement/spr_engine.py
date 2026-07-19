@@ -262,9 +262,15 @@ class SPREngine:
         run_uuid = str(uuid.uuid4())
 
         # Get facilities
+        # This product is India-first. A global seed catalog is useful for
+        # research, but foreign reserves must never be offered as an Indian
+        # SPR action in an operational recommendation.
         facilities = await self.pool.fetch(
-            "SELECT * FROM energy.spr_facilities WHERE is_deleted = false AND status = 'operational'"
+            """SELECT * FROM energy.spr_facilities
+               WHERE is_deleted = false AND status = 'operational' AND country = 'India'"""
         )
+        if not facilities:
+            raise ValueError("No operational Indian SPR facilities are configured")
 
         # Get policy
         policy = await self.pool.fetchrow(

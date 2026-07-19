@@ -19,7 +19,7 @@ from backend.shared.request_middleware import RequestTrackingMiddleware
 
 from db import get_pool, close_pool, bootstrap
 from routers import catalog, relationships, events, history, bulk, intelligence, digital_twin, procurement, command_center
-from services.risk_engine import ArticleSignalIngestor, CommodityPriceIngestor
+from services.risk_engine import AISIngestor, ArticleSignalIngestor, CommodityPriceIngestor
 
 setup_structlog("energy-service")
 logger = get_logger(__name__)
@@ -102,6 +102,19 @@ async def run_news_signal_ingestion_loop():
         await asyncio.sleep(NEWS_SIGNAL_INTERVAL_SECONDS)
 
 
+async def run_snapshot_ingestion_loop():
+    """Refresh cached source status without pretending flat-file snapshots are live."""
+    pool = await get_pool()
+    while True:
+        try:
+            await CommodityPriceIngestor(pool).ingest()
+            await AISIngestor(pool).ingest()
+            logger.info("snapshot_ingestion_tick_complete")
+        except Exception as exc:
+            logger.warning("snapshot_ingestion_tick_failed", error=str(exc))
+        await asyncio.sleep(NEWS_SIGNAL_INTERVAL_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     timer = StartupTimer("energy-service")
@@ -119,9 +132,11 @@ async def lifespan(app: FastAPI):
         logger.warning("commodity_price_ingest_at_startup_failed", error=str(exc))
     sys_metrics = asyncio.create_task(collect_system_metrics("energy-service"))
     news_signals = asyncio.create_task(run_news_signal_ingestion_loop())
+    snapshot_ingestion = asyncio.create_task(run_snapshot_ingestion_loop())
     yield
     sys_metrics.cancel()
     news_signals.cancel()
+    snapshot_ingestion.cancel()
     await close_pool()
     logger.info("energy-service stopped")
 

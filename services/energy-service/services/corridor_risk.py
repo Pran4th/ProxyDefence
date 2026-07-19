@@ -357,6 +357,23 @@ class CorridorRiskEngine:
         )
         return round(1.0 - float(val), 4) if val is not None else None
 
+    async def _ais_counts(self) -> tuple[dict[str, int], str | None]:
+        """Prefer persisted AIS snapshots; retain a read-only CSV fallback.
+
+        The returned value is still a cached snapshot, and source status is
+        exposed separately so callers cannot mistake it for a live stream.
+        """
+        rows = await self.pool.fetch(
+            """SELECT DISTINCT ON (location_name) location_name, vessel_count, recorded_at
+               FROM energy.ais_positions
+               ORDER BY location_name, recorded_at DESC"""
+        )
+        if rows:
+            counts = {row["location_name"]: int(row["vessel_count"] or 0) for row in rows}
+            latest = max(row["recorded_at"] for row in rows)
+            return counts, latest.isoformat()
+        return _load_ais_counts()
+
     @staticmethod
     def _ais_component(corridor: dict[str, Any], ais_counts: dict[str, int]) -> float | None:
         baseline = corridor.get("baseline_vessels")
@@ -395,7 +412,7 @@ class CorridorRiskEngine:
             return self._corridor_cache
 
         india_shares, imports_year = _load_india_shares()
-        ais_counts, ais_ts = _load_ais_counts()
+        ais_counts, ais_ts = await self._ais_counts()
         gdelt_baseline = _load_gdelt_historical_baseline()
 
         corridors_out = []

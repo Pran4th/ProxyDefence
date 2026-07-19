@@ -23,7 +23,7 @@ foreach ($c in $consumers) {
                    ". '$repoRoot\scripts\dev\common\load-env.ps1' -RepoRoot '$repoRoot'; " +
                    "Set-Location '$svcDir'; " +
                    "& '$venvPython' '$consumerScript'"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", $scriptBlock
+    Start-Process powershell -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $scriptBlock -WindowStyle Hidden
     Start-Sleep -Milliseconds 300
 }
 

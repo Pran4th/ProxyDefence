@@ -83,10 +83,9 @@ const News = () => {
       return;
     }
 
-    // Keyword search (ES-backed /search, same as Search.tsx -- NOT semantic
-    // search; that's a separate unused /semantic-search endpoint) hits an
-    // authenticated route. Anonymous visitors can't reach it and the search
-    // box is disabled for them below, but guard here too just in case.
+    // Keyword search is ES-backed and uses an authenticated route. Anonymous
+    // visitors cannot reach it; keep this guard even though the search box is
+    // disabled for them in the UI.
     if (!token) {
       setError("Sign in to search the full article archive.");
       return;

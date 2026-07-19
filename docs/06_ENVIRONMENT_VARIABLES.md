@@ -33,7 +33,7 @@ These fail fast — services crash on startup if missing:
 | `KAFKA_BOOTSTRAP_SERVERS` | kafka:9092 | Kafka broker address |
 | `NEWS_API_KEY` | — | GNews API key |
 | `ENERGY_LOAD_SEED` | 0 | Load seed data (1=yes) |
-| `ENERGY_SERVICE_URL` | http://energy-service:8000 | Energy Service URL |
+| `ENERGY_SERVICE_URL` | http://energy-service:8006 | Energy Service URL |
 | `MLFLOW_TRACKING_URI` | file:./mlruns | MLflow tracking URI |
 | `DVC_REMOTE` | ./data/dvc-store | DVC remote storage |
 | `SERVICE_VERSION` | 1.0.0 | Service version metadata |

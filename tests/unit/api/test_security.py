@@ -1,4 +1,25 @@
-"""Unit tests for backend.api_service.security."""
+"""Unit tests for API authentication and baseline browser-security controls."""
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from backend.shared.request_middleware import RequestTrackingMiddleware
+
+
+def test_request_tracking_middleware_adds_browser_security_headers():
+    app = FastAPI()
+    app.add_middleware(RequestTrackingMiddleware)
+
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy"}
+
+    response = TestClient(app).get("/health")
+
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["permissions-policy"] == "camera=(), geolocation=(), microphone=()"
 
 
 class TestHashPassword:

@@ -68,7 +68,16 @@ class CopilotQueryResponse(BaseCheck):
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read())
 
-            response = data.get("response") or data.get("answer") or data.get("content") or ""
+            # ``/copilot/query`` exposes the generated answer as ``summary``.
+            # Keep the older aliases for backwards-compatible deployments, but
+            # validate the current public contract first.
+            response = (
+                data.get("summary")
+                or data.get("response")
+                or data.get("answer")
+                or data.get("content")
+                or ""
+            )
             has_content = len(str(response)) > 10
             return CheckResult(
                 name=self.name, passed=has_content,
@@ -106,7 +115,7 @@ class HybridRAGRetrieval(BaseCheck):
                 )
             url = f"{self.config.modular_api_url}/api/v1/rag/search?q=energy+prices&limit=3"
             req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=self.config.http_timeout) as resp:
                 data = json.loads(resp.read())
 
             count = data.get("result_count", len(data.get("context_structured", [])))
@@ -209,7 +218,10 @@ class AgentQueryResponse(BaseCheck):
             payload = json.dumps({"query": "Summarize the current geopolitical risk level."}).encode()
             url = f"{self.config.modular_api_url}/api/v1/agents/query"
             req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            # The supervisor can invoke multiple specialists and an external
+            # LLM. Give this optional external path a bounded but realistic
+            # 90-second validation window; it remains a warning on timeout.
+            with urllib.request.urlopen(req, timeout=90) as resp:
                 data = json.loads(resp.read())
             has_content = len(str(data.get("content", ""))) > 10
             return CheckResult(

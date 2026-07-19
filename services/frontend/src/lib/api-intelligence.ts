@@ -185,6 +185,19 @@ export interface CommandResponseBundle {
   };
   spr_run: Record<string, unknown>;
   procurement_run: Record<string, unknown>;
+  evidence_bundle: {
+    uuid: string;
+    mode: "live" | "cached" | "replay" | "fallback";
+    input_provenance: Array<{
+      source: string;
+      display_name: string;
+      mode: string;
+      observed_at: string | null;
+      freshness_seconds: number | null;
+      fallback_reason: string | null;
+    }>;
+    decision_brief: Record<string, unknown>;
+  };
   telemetry: {
     uuid: string;
     signal_detected_at: string;
@@ -199,6 +212,7 @@ export interface CommandResponseBundle {
 export async function respondToSignal(body: {
   signal_uuid?: string;
   auto?: boolean;
+  refinery_uuid?: string;
 }): Promise<CommandResponseBundle> {
   const { data } = await api.post(`${BASE}/command/respond`, body, {
     timeout: 180000,
@@ -226,7 +240,15 @@ export async function fetchResponseTelemetry(): Promise<{
   return data;
 }
 
-// ── AIS vessel positions (real AISstream snapshot) ──────────────────────
+export async function recordEvidenceApproval(
+  bundleUuid: string,
+  body: { status: "reviewed" | "approved" | "executed" | "outcome_recorded"; actor?: string; note?: string }
+) {
+  const { data } = await api.post(`${BASE}/command/evidence/${bundleUuid}/approval`, body);
+  return data;
+}
+
+// ── AIS vessel positions (cached AISstream snapshot) ────────────────────
 
 export interface AisVessel {
   mmsi: string;

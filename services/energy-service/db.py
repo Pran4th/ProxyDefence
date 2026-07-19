@@ -48,6 +48,14 @@ async def bootstrap(_pool: asyncpg.Pool | None = None) -> None:
         sql_path=proc_path,
         logger=logger,
     )
+    pilot_path = str(infra_sql("pilot_readiness"))
+    await bootstrap_schema(
+        pool=p,
+        schema_name="energy",
+        sentinel_table="response_evidence_bundles",
+        sql_path=pilot_path,
+        logger=logger,
+    )
     from seed import load_seed_data
     await load_seed_data(p)
     await _init_procurement(p)

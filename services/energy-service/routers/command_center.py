@@ -9,6 +9,7 @@ from signal to recommendation" is a real, queryable number instead of a
 claim.
 """
 
+import json
 import statistics
 import uuid as uuid_mod
 from datetime import datetime, timezone
@@ -20,8 +21,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import get_pool
 from backend.shared.logging_config import get_logger
 from services.digital_twin.engine import SimulationEngine
+from services.evidence import EvidenceService
+from services.historical_replays import REPLAY_CASES
 from services.procurement.orchestrator import ProcurementOrchestrator
 from services.procurement.spr_engine import SPREngine
+from services.risk_engine import SignalDetector
 
 logger = get_logger(__name__)
 
@@ -110,6 +114,27 @@ async def _pick_auto_signal(pool: asyncpg.Pool) -> asyncpg.Record | None:
     )
 
 
+async def _resolve_refinery_target(pool: asyncpg.Pool, refinery_uuid: str | None) -> dict[str, Any] | None:
+    """Resolve an explicit operator target without pretending national results
+    are refinery-specific. The target is recorded in procurement assumptions and
+    evidence; supplier-grade pairing remains conditional on catalog coverage."""
+    if not refinery_uuid:
+        return None
+    refinery = await pool.fetchrow(
+        """SELECT r.uuid, r.name, l.name AS country, r.capacity_bpd, r.nelson_complexity_index,
+                  r.crude_types_accepted, r.status
+           FROM energy.refineries r
+           LEFT JOIN energy.locations l ON l.uuid = r.location_id
+           WHERE r.uuid = $1::uuid AND r.is_deleted = false""",
+        refinery_uuid,
+    )
+    if refinery is None:
+        raise HTTPException(status_code=404, detail="Target refinery not found")
+    context = dict(refinery)
+    context["uuid"] = str(context["uuid"])
+    return context
+
+
 @router.post("/respond")
 async def respond_to_signal(
     body: dict[str, Any],
@@ -118,7 +143,8 @@ async def respond_to_signal(
     """Full response pipeline: signal → scenario → digital twin → SPR → procurement.
 
     Body: {"signal_uuid": "..."} or {"auto": true} (picks the highest-severity
-    active signal). Optional "max_ticks" (default 30) bounds the twin horizon.
+    active signal). Optional "refinery_uuid" records the operator target and
+    its known crude constraints; "max_ticks" (default 30) bounds the twin horizon.
     """
     # ── Stage 0: resolve the signal ──────────────────────────────────────
     if body.get("signal_uuid"):
@@ -136,6 +162,7 @@ async def respond_to_signal(
         raise HTTPException(status_code=422, detail="Provide signal_uuid or auto=true")
 
     max_ticks = min(int(body.get("max_ticks", DEFAULT_MAX_TICKS)), 90)
+    refinery_target = await _resolve_refinery_target(pool, body.get("refinery_uuid"))
     telemetry_uuid = str(uuid_mod.uuid4())
     signal_detected_at = signal["created_at"]
     analysis_started_at = datetime.now(timezone.utc)
@@ -194,6 +221,7 @@ async def respond_to_signal(
             description=f"Triggered by signal {signal['uuid']}",
             supply_gap_bpd=supply_gap_bpd or None,
             optimization_goal=body.get("optimization_goal", "balanced"),
+            refinery_target=refinery_target,
         )
     except HTTPException:
         raise
@@ -217,6 +245,17 @@ async def respond_to_signal(
         recommendation_generated_at, total_latency,
     )
 
+    evidence = await EvidenceService(pool).create_bundle(
+        telemetry_uuid=telemetry_uuid,
+        signal=signal,
+        scenario=scenario,
+        twin=twin,
+        spr_run=spr_run,
+        procurement_run=procurement_run,
+        max_ticks=max_ticks,
+        refinery_target=refinery_target,
+    )
+
     return {
         "signal": dict(signal),
         "scenario": {
@@ -232,6 +271,7 @@ async def respond_to_signal(
         },
         "spr_run": spr_run,
         "procurement_run": procurement_run,
+        "evidence_bundle": evidence,
         "telemetry": {
             "uuid": telemetry_uuid,
             "signal_detected_at": signal_detected_at.isoformat(),
@@ -242,6 +282,77 @@ async def respond_to_signal(
             "pipeline_latency_seconds": pipeline_latency,
         },
     }
+
+
+@router.get("/evidence/{bundle_uuid}")
+async def get_evidence_bundle(
+    bundle_uuid: str,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Exportable, reproducible input-and-decision record for one response."""
+    bundle = await EvidenceService(pool).get_bundle(bundle_uuid)
+    if bundle is None:
+        raise HTTPException(status_code=404, detail="Evidence bundle not found")
+    return bundle
+
+
+@router.post("/evidence/{bundle_uuid}/approval")
+async def record_decision_approval(
+    bundle_uuid: str,
+    body: dict[str, Any],
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Record a human review step; this endpoint never executes a trade."""
+    status = body.get("status")
+    if status not in {"reviewed", "approved", "executed", "outcome_recorded"}:
+        raise HTTPException(status_code=422, detail="status must be reviewed, approved, executed, or outcome_recorded")
+    evidence = EvidenceService(pool)
+    if await evidence.get_bundle(bundle_uuid) is None:
+        raise HTTPException(status_code=404, detail="Evidence bundle not found")
+    actor = str(body.get("actor") or "operator")
+    note = body.get("note")
+    await evidence.record_approval(bundle_uuid, status, actor, note)
+    return {"evidence_bundle_uuid": bundle_uuid, "status": status, "actor": actor, "note": note}
+
+
+@router.get("/replays")
+async def list_historical_replays() -> dict[str, Any]:
+    """Available historical cases. Expected effects are directional checks."""
+    return {"items": [{"key": key, "name": case["name"], "source_window": case["source_window"], "expected_effects": case["expected_effects"]} for key, case in REPLAY_CASES.items()]}
+
+
+@router.post("/replays/{case_key}/run")
+async def run_historical_replay(
+    case_key: str,
+    body: dict[str, Any] | None = None,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Run a curated historical case through the live decision engines."""
+    case = REPLAY_CASES.get(case_key)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Unknown replay case")
+    signal = await SignalDetector(pool).ingest_signal(case["signal"])
+    max_ticks = min(int((body or {}).get("max_ticks", DEFAULT_MAX_TICKS)), 90)
+    response = await respond_to_signal({"signal_uuid": str(signal["uuid"]), "max_ticks": max_ticks}, pool)
+    evidence = response["evidence_bundle"]
+    impacts = response["twin_run"]["aggregate_impacts"]
+    measured = {
+        "pipeline_latency_seconds": response["telemetry"]["pipeline_latency_seconds"],
+        "scenario_name": response["scenario"]["name"],
+        "supply_gap_bpd": impacts.get("max_supply_gap_bpd") or impacts.get("supply_gap_bpd") or 0,
+        "evidence_mode": evidence["mode"],
+        "expected_directional_check": response["scenario"]["name"] == case["expected_effects"]["scenario"],
+    }
+    replay_uuid = str(uuid_mod.uuid4())
+    await pool.execute(
+        """INSERT INTO energy.historical_replay_runs
+           (uuid, case_key, case_name, source_window, expected_effects, measured_results,
+            evidence_bundle_uuid, status, completed_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7::uuid,'completed',NOW())""",
+        replay_uuid, case_key, case["name"], json.dumps(case["source_window"]),
+        json.dumps(case["expected_effects"]), json.dumps(measured), evidence["uuid"],
+    )
+    return {"replay_uuid": replay_uuid, "case_key": case_key, "expected_effects": case["expected_effects"], "measured_results": measured, "response": response}
 
 
 @router.get("/telemetry")

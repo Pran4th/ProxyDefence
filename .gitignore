@@ -159,6 +159,12 @@ Thumbs.db
 coverage.xml
 htmlcov/
 
+# Generated local validation artifacts
+validation_report.json
+validation_report.html
+services/frontend/test-results/
+services/frontend/playwright-report/
+
 #################################################
 # Git LFS / Large Downloads
 #################################################
