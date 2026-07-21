@@ -50,7 +50,6 @@ You'll need two external API keys before the pipeline can do anything real (the 
 
 GNews API key — free tier at https://gnews.io — sets NEWS_API_KEY. Without a real key, ingest-service fails every fetch with apikey=replace-me style 400 errors.
 Groq API key — free tier at https://console.groq.com — sets OPENAI_API_KEY (yes, that variable name, even for Groq — it's read by an OpenAI-compatible SDK pointed at Groq's endpoint). Powers the copilot/agents/ RAG features in modular-api. Any other OpenAI-compatible provider works too — just change OPENAI_BASE_URL/LLM_DEFAULT_MODEL to match.
-Optional (Tier 2 data acquisition — only needed if you're re-running the ml-platform ingestion scripts, not required to just run the app): NEWSDATA_API_KEY (https://newsdata.io), EIA_API_KEY (https://www.eia.gov/opendata), AISSTREAM_API_KEY (https://aisstream.io), CRUDE_PRICE_API_KEY (https://www.crudepriceapi.com).
 
 2. Create your .env
 cp .env.example .env
@@ -58,19 +57,6 @@ Then edit .env:
 
 Set NEWS_API_KEY and OPENAI_API_KEY to the real keys from step 1.
 .env.example's committed defaults are tuned for the Docker network, not local dev — for a local (non-Docker services) setup, also change:
-ENERGY_SERVICE_URL=http://energy-service:8006 → http://127.0.0.1:8006
-EMBEDDING_SERVICE_URL=http://embedding-service:8005 → http://127.0.0.1:8005
-KAFKA_BOOTSTRAP_SERVERS=kafka:9092 → 127.0.0.1:9092
-POSTGRES_HOST/ELASTICSEARCH_HOST → 127.0.0.1 (or localhost)
-POSTGRES_PORT → 5434, not 5432. docker-compose.yml maps Postgres to host port 5434 (5432 is deliberately avoided in case another project on your machine already has a native Postgres there). Every script and service in this repo expects 5434 — if you ever see connection-refused errors on 5432, that's a stale assumption, not a real target.
-CORS_ORIGINS must include the port the frontend actually runs on (http://localhost:8080 — check services/frontend/vite.config.ts if that ever changes). A mismatched port here is a common first-run bug: the frontend loads but every API call fails with a CORS error in the browser console.
-Leave ENERGY_LOAD_SEED=1 if you want the energy-domain demo data (20+ countries, ports, pipelines, refineries, etc.) seeded on first boot.
-Important: if you edit .env while services are already running, you must restart them — every service reads env vars once at process startup, they are not hot-reloaded.
-
-Watch out for line merges. If you ever hand-edit .env in an editor that reformats on save, double check no two lines got joined into one — e.g. CORS_ORIGINS=...,http://localhost:8081ELASTICSEARCH_PASSWORD=change-me is a real failure mode that happened on this machine: it silently deletes the ELASTICSEARCH_PASSWORD variable (swallowed into the previous line's value) while also corrupting the last CORS origin. Since ELASTICSEARCH_PASSWORD is a required variable (backend/shared/settings.py), every service that touches Elasticsearch fails at startup with a "missing required environment variable" error that has nothing obviously to do with CORS. Quick sanity check after any manual edit:
-
-Get-Content .env | Select-String "=" | Measure-Object | Select-Object -ExpandProperty Count
-should roughly match the number of variables you expect — a sudden drop means something got merged.
 
 3. One-time dependency install
 scripts/dev/setup/setup.ps1
