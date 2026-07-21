@@ -47,8 +47,8 @@ Then edit `.env`:
 - Set `NEWS_API_KEY` and `OPENAI_API_KEY` to the real keys from step 1.
 - **`.env.example`'s committed defaults are tuned for the Docker network,
   not local dev** — for a local (non-Docker services) setup, also change:
-  - `ENERGY_SERVICE_URL=http://energy-service:8000` → `http://127.0.0.1:8006`
-  - `EMBEDDING_SERVICE_URL=http://embedding-service:8000` → `http://127.0.0.1:8005`
+  - `ENERGY_SERVICE_URL=http://energy-service:8006` → `http://127.0.0.1:8006`
+  - `EMBEDDING_SERVICE_URL=http://embedding-service:8005` → `http://127.0.0.1:8005`
   - `KAFKA_BOOTSTRAP_SERVERS=kafka:9092` → `127.0.0.1:9092`
   - `POSTGRES_HOST`/`ELASTICSEARCH_HOST` → `127.0.0.1` (or `localhost`)
   - `POSTGRES_PORT` → **`5434`, not `5432`**. `docker-compose.yml` maps
@@ -92,7 +92,7 @@ scripts/dev/setup/setup.ps1
 ```
 
 This creates a separate `.venv` per Python service, installs each
-`requirements.txt`, downloads the spaCy model `ml-service` needs, installs
+`requirements.txt`, downloads the spaCy model the ML-platform consumer needs, installs
 shared dev tooling (pytest, ruff, pyright), and installs pre-commit hooks.
 Safe to re-run; pass `-Force` to recreate all venvs from scratch.
 
@@ -217,7 +217,7 @@ start it directly instead of using `start-local.ps1`:
 ```powershell
 cd services/energy-service
 $env:PYTHONPATH = "C:\path\to\ProxyDefence"
-.venv\Scripts\uvicorn app:app --host 0.0.0.0 --port 8006 --reload
+.venv\Scripts\uvicorn app:app --host 127.0.0.1 --port 8006 --reload
 ```
 
 Or use the per-service script, e.g. `scripts/dev/backend/start-energy.ps1`

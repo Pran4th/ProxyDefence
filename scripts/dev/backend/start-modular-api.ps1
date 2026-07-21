@@ -14,4 +14,4 @@ $loadEnv = Join-Path $repoRoot "scripts\dev\common\load-env.ps1"
 Set-Location $repoRoot
 $env:PYTHONPATH = $repoRoot
 $env:ENVIRONMENT = "development"
-& $venvPython -m uvicorn backend.api.app:app --host 0.0.0.0 --port 8000 --reload
+& $venvPython -m uvicorn backend.api.app:app --host 127.0.0.1 --port 8000 --reload

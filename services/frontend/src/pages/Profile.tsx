@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Lock, User } from "lucide-react";
+import { Bell, Lock, Sparkles, User } from "lucide-react";
 
 import AppShell from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/context/AuthContext";
-import { updateProfile, updateNotificationPreferences, changePassword, type NotificationPreferences } from "@/lib/api";
+import {
+  updateProfile,
+  updateNotificationPreferences,
+  changePassword,
+  toggleTierBeta,
+  type NotificationPreferences,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
@@ -33,6 +39,8 @@ const Profile = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+
+  const [togglingTier, setTogglingTier] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -92,6 +100,22 @@ const Profile = () => {
       });
     } finally {
       setChangingPassword(false);
+    }
+  };
+
+  const handleToggleTier = async () => {
+    setTogglingTier(true);
+    try {
+      const updated = await toggleTierBeta();
+      setUser(updated);
+      toast({
+        title: updated.tier === "premium" ? "Premium activated" : "Switched to Free tier",
+      });
+    } catch (err) {
+      console.error("Failed to toggle tier", err);
+      toast({ title: "Failed to update plan", variant: "destructive" });
+    } finally {
+      setTogglingTier(false);
     }
   };
 
@@ -272,6 +296,32 @@ const Profile = () => {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-6">
+            <div className="mb-2 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h4 className="font-semibold">Plan</h4>
+            </div>
+            <p className="mb-1 text-lg font-bold capitalize">{user?.tier ?? "free"}</p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {user?.tier === "premium"
+                ? "Full access: Command Center response pipeline, custom scenario runs, SPR & procurement analysis."
+                : "Free tier: live signal feed, corridor risk, article market impact, and read-only dashboards. Upgrade for the full response pipeline."}
+            </p>
+            <Button
+              variant={user?.tier === "premium" ? "outline" : "hero"}
+              size="sm"
+              className="w-full"
+              onClick={() => void handleToggleTier()}
+              disabled={togglingTier}
+            >
+              {togglingTier
+                ? "Updating..."
+                : user?.tier === "premium"
+                  ? "Downgrade to Free"
+                  : "Try Premium (Beta, free during hackathon)"}
+            </Button>
           </div>
         </div>
       </div>

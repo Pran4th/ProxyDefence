@@ -1,16 +1,23 @@
 """Corridor & supplier disruption probability — live, attributable, testable.
 
 Computes a 30-day disruption probability per import corridor as a documented
-weighted blend of four real inputs already flowing through this platform:
+weighted blend of five real inputs already flowing through this platform:
 
-  1. signal_pressure  — count × severity of active energy.disruption_signals
-                        whose text/regions match the corridor (live news→ML)
-  2. entity_risk      — mean ML-blended risk score of the corridor's member
-                        entities (energy.risk_scores, trained-classifier blend)
-  3. instability      — 1 − mean GDELT-derived country_political_stability of
-                        suppliers on the corridor (energy.supplier_intelligence)
-  4. ais_anomaly      — vessel count at the corridor's chokepoints vs a
-                        configured baseline (real AISstream snapshots)
+  1. signal_pressure    — count × severity of active energy.disruption_signals
+                          whose text/regions match the corridor (live news→ML)
+  2. entity_risk        — mean ML-blended risk score of the corridor's member
+                          entities (energy.risk_scores, trained-classifier blend)
+  3. instability        — 1 − mean GDELT-derived country_political_stability of
+                          suppliers on the corridor (energy.supplier_intelligence)
+  4. ais_anomaly        — vessel count at the corridor's chokepoints vs a
+                          configured baseline (real AISstream snapshots)
+  5. historical_anomaly — today's live signal count for the corridor vs a real
+                          45-day historical GDELT event-count baseline (mean/std)
+                          for the corridor's partner countries -- a genuine,
+                          data-driven baseline, not a hardcoded constant like
+                          ais_anomaly's baseline_vessels (AIS is a single
+                          point-in-time snapshot with no temporal depth to
+                          learn a baseline from; GDELT has real multi-day history)
 
 This is deliberately NOT presented as a trained model: it is a calibrated
 composite index whose every driver is attributable to a named signal or
@@ -19,6 +26,7 @@ India import share per corridor comes from the real UN Comtrade
 india-crude-imports dataset (2021-2024).
 """
 
+import ast
 import csv
 import math
 from collections import defaultdict
@@ -36,10 +44,11 @@ logger = get_logger(__name__)
 # ── Published assumptions (the "explicit and testable" part) ────────────────
 
 WEIGHTS = {
-    "signal_pressure": 0.40,
-    "entity_risk": 0.25,
-    "instability": 0.20,
-    "ais_anomaly": 0.15,
+    "signal_pressure": 0.35,
+    "entity_risk": 0.20,
+    "instability": 0.15,
+    "ais_anomaly": 0.10,
+    "historical_anomaly": 0.20,
 }
 
 ASSUMPTIONS = [
@@ -66,6 +75,14 @@ ASSUMPTIONS = [
         "value": "logistic( 4·(blend − 0.45) )",
         "source": "Centered so a fully-quiet corridor reads ~15% and a fully-stressed one ~85%",
         "how_to_test": "Calibrate against historical frequency of >7-day corridor disruptions",
+    },
+    {
+        "name": "historical_anomaly_baseline",
+        "value": "z = (today's matched live signal count − 45-day mean) / std, squashed to [0, min(1, z/3)]",
+        "source": "Real per-day event counts from gdelt-events-sample.csv (45 distinct calendar days) "
+                   "for the corridor's partner countries -- a genuine historical distribution, not a "
+                   "fabricated one, computed fresh from real GDELT timestamps",
+        "how_to_test": "Compare the printed mean/std against a manual daily count from the same CSV",
     },
 ]
 
@@ -149,6 +166,16 @@ _INDIA_IMPORTS_CSV = (
     project_root() / "datasets" / "processed" / "un_comtrade" / "india-crude-imports-multiyear.csv"
 )
 _AIS_CSV = project_root() / "datasets" / "processed" / "ais-chokepoints" / "ais-chokepoints.csv"
+_GDELT_CSV = project_root() / "datasets" / "processed" / "gdelt-merged" / "gdelt-events-sample.csv"
+# GDELT's action_geo_country is FIPS 2-letter; corridor partners are ISO3 --
+# same small mapping used in ml-platform/scripts/build_procurement_dataset.py,
+# covering the countries that actually appear across CORRIDORS' partner lists.
+_FIPS_TO_ISO3 = {
+    "IZ": "IRQ", "SA": "SAU", "AE": "ARE", "KU": "KWT", "QA": "QAT",
+    "IR": "IRN", "MU": "OMN", "BA": "BHR", "RS": "RUS", "US": "USA",
+    "BR": "BRA", "GY": "GUY", "CO": "COL", "NI": "NGA", "AO": "AGO",
+    "GB": "GAB", "EK": "GNQ", "CM": "CMR", "CF": "COG",
+}
 
 
 def _load_india_shares() -> tuple[dict[str, float], int | None]:
@@ -189,6 +216,51 @@ def _load_ais_counts() -> tuple[dict[str, int], str | None]:
     return dict(counts), latest_ts
 
 
+def _load_gdelt_historical_baseline() -> dict[str, dict[str, float]]:
+    """Per-corridor historical daily event-count distribution (mean, std,
+    days_observed) from GDELT's real ~45 distinct calendar days -- used to
+    score how anomalous TODAY's live signal count is relative to genuine
+    history, not a fabricated one. Unsupervised (no rare-event labels
+    needed): this only requires "what's normal", not "what a closure looks
+    like", which is exactly the kind of signal AIS's single-snapshot data
+    can't support but GDELT's real multi-day history can."""
+    try:
+        with open(_GDELT_CSV, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+    except OSError as exc:
+        logger.warning("gdelt_csv_unavailable_for_baseline", error=str(exc))
+        return {}
+
+    daily_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for r in rows:
+        try:
+            attrs = ast.literal_eval(r["attributes"])
+        except (ValueError, SyntaxError):
+            continue
+        day = str(attrs.get("date_added") or "")[:8]  # YYYYMMDD
+        if not day:
+            continue
+        actor1 = attrs.get("actor1_country") or ""
+        geo = _FIPS_TO_ISO3.get(attrs.get("action_geo_country") or "", "")
+        matched_countries = {c for c in (actor1, geo) if c}
+        if not matched_countries:
+            continue
+        for key, corridor in CORRIDORS.items():
+            if matched_countries & set(corridor["partners"]):
+                daily_counts[key][day] += 1
+
+    baseline: dict[str, dict[str, float]] = {}
+    for key, days in daily_counts.items():
+        counts = list(days.values())
+        n = len(counts)
+        if n < 5:  # too few distinct days to trust a distribution
+            continue
+        mean = sum(counts) / n
+        variance = sum((c - mean) ** 2 for c in counts) / n
+        baseline[key] = {"mean": round(mean, 2), "std": round(variance ** 0.5, 2), "days_observed": n}
+    return baseline
+
+
 def _logistic_squash(blend: float) -> float:
     """probability_squash assumption: see ASSUMPTIONS."""
     return 1.0 / (1.0 + math.exp(-4.0 * (blend - 0.45)))
@@ -200,6 +272,19 @@ class CorridorRiskEngine:
         self._corridor_cache: dict[str, Any] | None = None
         self._brent_cache: float | None = None
         self._demand_cache: float | None = None
+        self._partner_names_cache: dict[str, str] | None = None
+
+    async def _partner_country_names(self, iso3_codes: tuple[str, ...]) -> list[str]:
+        """Resolve a corridor's real member-country ISO3 codes to display
+        names via energy.locations -- this is genuinely real data (the
+        corridor's actual supplier-country membership from CORRIDORS[key]),
+        not a fabricated per-country breakdown the model doesn't compute."""
+        if self._partner_names_cache is None:
+            rows = await self.pool.fetch(
+                "SELECT iso_code_3, name FROM energy.locations WHERE iso_code_3 IS NOT NULL"
+            )
+            self._partner_names_cache = {r["iso_code_3"]: r["name"] for r in rows}
+        return [self._partner_names_cache[c] for c in iso3_codes if c in self._partner_names_cache]
 
     async def _member_entity_uuids(self, corridor: dict[str, Any]) -> list[str]:
         rows = await self.pool.fetch(
@@ -212,8 +297,10 @@ class CorridorRiskEngine:
         )
         return [str(r["uuid"]) for r in rows]
 
-    async def _signal_component(self, corridor: dict[str, Any]) -> tuple[float, list[dict]]:
-        """Signal pressure ∈ [0,1] plus the top named drivers behind it."""
+    async def _signal_component(self, corridor: dict[str, Any]) -> tuple[float, list[dict], int]:
+        """Signal pressure ∈ [0,1], the top named drivers behind it, and the
+        raw matched-signal count (used separately by the historical-anomaly
+        component to compare against the real GDELT baseline)."""
         rows = await self.pool.fetch(
             """SELECT uuid, title, severity, confidence, created_at, source
                FROM energy.disruption_signals
@@ -244,7 +331,7 @@ class CorridorRiskEngine:
             }
             for s, r in matched[:3]
         ]
-        return pressure, drivers
+        return pressure, drivers, len(matched)
 
     async def _entity_risk_component(self, entity_uuids: list[str]) -> float | None:
         if not entity_uuids:
@@ -270,6 +357,23 @@ class CorridorRiskEngine:
         )
         return round(1.0 - float(val), 4) if val is not None else None
 
+    async def _ais_counts(self) -> tuple[dict[str, int], str | None]:
+        """Prefer persisted AIS snapshots; retain a read-only CSV fallback.
+
+        The returned value is still a cached snapshot, and source status is
+        exposed separately so callers cannot mistake it for a live stream.
+        """
+        rows = await self.pool.fetch(
+            """SELECT DISTINCT ON (location_name) location_name, vessel_count, recorded_at
+               FROM energy.ais_positions
+               ORDER BY location_name, recorded_at DESC"""
+        )
+        if rows:
+            counts = {row["location_name"]: int(row["vessel_count"] or 0) for row in rows}
+            latest = max(row["recorded_at"] for row in rows)
+            return counts, latest.isoformat()
+        return _load_ais_counts()
+
     @staticmethod
     def _ais_component(corridor: dict[str, Any], ais_counts: dict[str, int]) -> float | None:
         baseline = corridor.get("baseline_vessels")
@@ -283,6 +387,21 @@ class CorridorRiskEngine:
         deviation = abs(observed - baseline) / baseline
         return round(min(1.0, deviation), 4)
 
+    @staticmethod
+    def _historical_anomaly_component(
+        key: str, current_count: int, baseline: dict[str, dict[str, float]],
+    ) -> tuple[float | None, dict[str, float] | None]:
+        """z-score of today's matched live signal count against the real
+        45-day GDELT historical baseline for this corridor. Only positive
+        deviations (more signals than usual) raise the score -- a quieter-
+        than-usual corridor isn't "anomalous risk", just calm."""
+        b = baseline.get(key)
+        if not b or b["std"] <= 0:
+            return None, b
+        z = (current_count - b["mean"]) / b["std"]
+        score = round(min(1.0, max(0.0, z / 3.0)), 4)  # 3 std devs -> full anomaly score
+        return score, b
+
     async def compute_all(self, use_cache: bool = False) -> dict[str, Any]:
         """use_cache reuses this engine instance's last computed snapshot --
         for batch use (e.g. explaining many signals in one feed request)
@@ -293,21 +412,26 @@ class CorridorRiskEngine:
             return self._corridor_cache
 
         india_shares, imports_year = _load_india_shares()
-        ais_counts, ais_ts = _load_ais_counts()
+        ais_counts, ais_ts = await self._ais_counts()
+        gdelt_baseline = _load_gdelt_historical_baseline()
 
         corridors_out = []
         for key, corridor in CORRIDORS.items():
             entity_uuids = await self._member_entity_uuids(corridor)
-            signal_pressure, drivers = await self._signal_component(corridor)
+            signal_pressure, drivers, signal_count = await self._signal_component(corridor)
             entity_risk = await self._entity_risk_component(entity_uuids)
             instability = await self._instability_component(corridor)
             ais_anomaly = self._ais_component(corridor, ais_counts)
+            historical_anomaly, historical_stats = self._historical_anomaly_component(
+                key, signal_count, gdelt_baseline,
+            )
 
             components = {
                 "signal_pressure": signal_pressure,
                 "entity_risk": entity_risk,
                 "instability": instability,
                 "ais_anomaly": ais_anomaly,
+                "historical_anomaly": historical_anomaly,
             }
             available = {k: v for k, v in components.items() if v is not None}
             weight_sum = sum(WEIGHTS[k] for k in available)
@@ -333,6 +457,8 @@ class CorridorRiskEngine:
                 "india_import_share_pct": india_share,
                 "india_import_share_year": imports_year,
                 "polyline": corridor["polyline"],
+                "historical_baseline": historical_stats,
+                "current_signal_count": signal_count,
             })
 
         corridors_out.sort(key=lambda c: c["probability_30d"], reverse=True)
@@ -438,6 +564,9 @@ class CorridorRiskEngine:
         corridor_name = None
         corridor_probability = None
         india_share_pct = None
+        partner_countries: list[str] = []
+        historical_anomaly_score = None
+        historical_baseline = None
         if matched_key:
             all_corridors = await self.compute_all(use_cache=True)
             match = next(
@@ -447,6 +576,9 @@ class CorridorRiskEngine:
                 corridor_name = match["name"]
                 corridor_probability = match["probability_30d"]
                 india_share_pct = match["india_import_share_pct"]
+                historical_anomaly_score = match["components"].get("historical_anomaly")
+                historical_baseline = match.get("historical_baseline")
+            partner_countries = await self._partner_country_names(CORRIDORS[matched_key]["partners"])
 
         exposure_usd = None
         if india_share_pct:
@@ -454,11 +586,19 @@ class CorridorRiskEngine:
             national_demand_bpd = await self._national_demand_bpd()
             daily_import_value_usd = national_demand_bpd * brent
             ttl_hours = float(signal.get("ttl_hours") or 72)
+            # corridor_probability was computed above but never actually fed
+            # into the dollar figure -- exposure clustered into a handful of
+            # bands driven almost entirely by `confidence` (a narrow ML-output
+            # range), regardless of how likely the disruption actually was.
+            # This is expected-value risk modeling: exposure should scale with
+            # likelihood, not just one article's severity/confidence.
+            likelihood = corridor_probability if corridor_probability is not None else 1.0
             exposure_usd = round(
                 daily_import_value_usd
                 * (india_share_pct / 100)
                 * severity_score
                 * confidence
+                * likelihood
                 * (ttl_hours / 24),
                 0,
             )
@@ -473,6 +613,15 @@ class CorridorRiskEngine:
                 f"{round((corridor_probability or 0) * 100)}% 30-day disruption "
                 f"probability"
                 + (f" and {india_share_pct}% of India's crude imports." if india_share_pct else ".")
+            )
+        if partner_countries:
+            parts.append(f"Markets whose supply routes through this corridor: {', '.join(partner_countries)}.")
+        if historical_baseline and historical_anomaly_score is not None:
+            parts.append(
+                f"Today's live signal volume for this corridor is running "
+                f"{'above' if historical_anomaly_score > 0 else 'in line with'} "
+                f"its {historical_baseline['days_observed']}-day historical baseline "
+                f"(mean {historical_baseline['mean']}, std {historical_baseline['std']} events/day)."
             )
         if regions:
             parts.append(f"Affected regions: {', '.join(regions[:4])}.")
@@ -496,12 +645,15 @@ class CorridorRiskEngine:
             "corridor_name": corridor_name,
             "corridor_probability_30d": corridor_probability,
             "india_import_share_pct": india_share_pct,
+            "corridor_partner_countries": partner_countries,
+            "historical_anomaly_score": historical_anomaly_score,
+            "historical_baseline": historical_baseline,
             "estimated_exposure_usd": exposure_usd,
             "assumptions": [
                 {
                     "name": "exposure_formula",
-                    "value": "national_demand_bpd × live_brent × india_share × severity × confidence × (ttl_hours/24)",
-                    "source": "Derived from live energy.demand_profiles + live Brent, same pattern as digital_twin/flow.py",
+                    "value": "national_demand_bpd × live_brent × india_share × severity × confidence × corridor_probability_30d × (ttl_hours/24)",
+                    "source": "Expected-value style: exposure scales with likelihood (corridor_probability_30d) as well as severity/confidence, not severity/confidence alone",
                     "how_to_test": "Compare against the digital twin's full scenario run for the same event",
                 },
             ],

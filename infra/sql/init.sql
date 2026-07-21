@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     organization TEXT,
     location TEXT,
     notification_preferences JSONB NOT NULL DEFAULT '{"critical_threat_alerts": true, "weekly_reports": true, "simulation_results": false, "system_updates": true}'::jsonb,
+    tier VARCHAR(20) NOT NULL DEFAULT 'free',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

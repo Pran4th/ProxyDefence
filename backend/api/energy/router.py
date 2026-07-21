@@ -1,13 +1,47 @@
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 
+from backend.api_service.security import decode_access_token
 from backend.shared.settings import settings
 
 router = APIRouter(prefix="/api/v1/energy", tags=["energy"])
 intel_router = APIRouter(prefix="/api/v1/intelligence", tags=["intelligence"])
 
 ENERGY_BASE = settings.ENERGY_SERVICE_URL.rstrip("/")
+
+# Deliberately empty: the response pipeline, digital twin, and SPR/procurement
+# runs are the core product (and the hackathon judging path), not an add-on --
+# gating them broke live demand for anyone not on the premium tier. Revisit
+# premium/monetization scope once these engines are solid and it's not mid-hackathon.
+# _check_premium below stays wired up so re-adding a path here is a one-line change.
+PREMIUM_PATHS: set[str] = set()
+
+
+async def _check_premium(request: Request) -> None:
+    """_intel_proxy is registered via add_api_route on a catch-all path, so
+    normal FastAPI Depends() can't gate individual proxied paths -- the token
+    has to be pulled from the header and decoded by hand rather than via the
+    get_current_user dependency (which relies on DI to resolve its
+    HTTPBearer default)."""
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    payload = decode_access_token(auth_header[7:])
+    user_id = int(payload["sub"])
+    if payload.get("role") == "admin":
+        return
+    pool = request.app.state.pg_pool
+    tier = await pool.fetchval("SELECT tier FROM users WHERE id = $1", user_id)
+    if tier != "premium":
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="This feature requires a Premium account.",
+        )
 
 
 async def _proxy(request: Request, path: str):
@@ -36,6 +70,8 @@ async def _proxy(request: Request, path: str):
 
 
 async def _intel_proxy(request: Request, path: str):
+    if path in PREMIUM_PATHS:
+        await _check_premium(request)
     url = f"{ENERGY_BASE}/api/v1/intelligence/{path}"
     body = await request.body()
     headers = {
@@ -43,7 +79,13 @@ async def _intel_proxy(request: Request, path: str):
         if k.lower() not in {"host", "content-length"}
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # command/respond chains digital-twin + SPR + procurement and measures
+    # 40-50s end to end -- a flat 30s timeout here made the gateway abort the
+    # upstream call before energy-service finished, which surfaces to the
+    # browser as a bare failed connection (no response headers at all), which
+    # Chrome reports as a misleading CORS error instead of the real timeout.
+    # 170s stays under the frontend axios client's own 180s timeout.
+    async with httpx.AsyncClient(timeout=170.0) as client:
         resp = await client.request(
             method=request.method,
             url=url,

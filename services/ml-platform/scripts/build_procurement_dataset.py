@@ -187,7 +187,8 @@ def build_options(suppliers: pd.DataFrame, sanctions: dict[str, int],
 
 
 async def enrich_supplier_intelligence(pool: asyncpg.Pool, sanctions: dict[str, int],
-                                       escalation: dict[str, float]) -> None:
+                                       escalation: dict[str, float],
+                                       congestion: dict[str, float]) -> None:
     suppliers = await pool.fetch(
         "SELECT s.uuid, s.slug FROM energy.suppliers s WHERE s.is_deleted = false"
     )
@@ -195,6 +196,7 @@ async def enrich_supplier_intelligence(pool: asyncpg.Pool, sanctions: dict[str, 
         iso3, _, _ = SUPPLIER_COUNTRY.get(s["slug"], ("UNK", None, 0.0))
         sanction_count = sanctions.get(iso3, 0)
         esc_rate = escalation.get(iso3, 0.19)
+        congest = congestion.get(iso3, 0.1)
         sanctioned = sanction_count > 100
         compliance = "high" if sanctioned else ("medium" if esc_rate > 0.25 else "low")
         result = await pool.execute(
@@ -202,13 +204,16 @@ async def enrich_supplier_intelligence(pool: asyncpg.Pool, sanctions: dict[str, 
                SET sanctions_exposure = $2,
                    compliance_risk = $3,
                    country_political_stability = GREATEST(0.05,
-                       country_political_stability * (1 - 0.4 * LEAST($4::float / 5000.0, 1.0)) * (1 - 0.5 * $5::float))
+                       country_political_stability * (1 - 0.4 * LEAST($4::float / 5000.0, 1.0)) * (1 - 0.5 * $5::float)),
+                   sanction_count = $4::int,
+                   gdelt_escalation_rate = $5,
+                   port_congestion_index = $6
                FROM energy.suppliers s
                WHERE s.uuid = si.supplier_uuid AND s.slug = $1""",
-            s["slug"], sanctioned, compliance, float(sanction_count), esc_rate,
+            s["slug"], sanctioned, compliance, float(sanction_count), esc_rate, congest,
         )
         print(f"  enriched {s['slug']}: sanctions={sanction_count} exposure={sanctioned} "
-              f"escalation={esc_rate:.3f} compliance={compliance} ({result})")
+              f"escalation={esc_rate:.3f} congestion={congest:.3f} compliance={compliance} ({result})")
 
 
 async def main() -> None:
@@ -239,7 +244,7 @@ async def main() -> None:
 
     if enrich:
         print("enriching energy.supplier_intelligence with real signals...")
-        await enrich_supplier_intelligence(pool, sanctions, escalation)
+        await enrich_supplier_intelligence(pool, sanctions, escalation, congestion)
 
     await pool.close()
 

@@ -48,9 +48,21 @@ def load_features() -> tuple[pd.DataFrame, pd.Series]:
         "actor1_country": attrs.apply(lambda d: d.get("actor1_country") or "NONE"),
         "actor2_country": attrs.apply(lambda d: d.get("actor2_country") or "NONE"),
         "action_geo_country": attrs.apply(lambda d: d.get("action_geo_country") or "NONE"),
+        # actor1/2_code are CAMEO actor-role codes (government/military/
+        # business/etc) -- independent information about who's involved,
+        # previously unused. NOTE: event_code was tried here too, but it's
+        # NOT independent signal -- verified live that its 2-digit root
+        # category maps 1:1 to quad_class (0 of 20 roots are ambiguous
+        # across a 20k-row sample), because GDELT's own quad_class is
+        # literally derived from the event_code taxonomy. Including it
+        # let the model reconstruct half the label instead of predicting
+        # it (val AUC jumped to an implausible 0.985) -- deliberately
+        # excluded as leakage, same reasoning as excluding quad_class itself.
+        "actor1_code": attrs.apply(lambda d: d.get("actor1_code") or "NONE"),
+        "actor2_code": attrs.apply(lambda d: d.get("actor2_code") or "NONE"),
     })
 
-    for col in ["actor1_country", "actor2_country", "action_geo_country"]:
+    for col in ["actor1_country", "actor2_country", "action_geo_country", "actor1_code", "actor2_code"]:
         top = feat[col].value_counts().nlargest(TOP_N_COUNTRIES).index
         feat[col] = feat[col].where(feat[col].isin(top), other="OTHER")
         dummies = pd.get_dummies(feat[col], prefix=col, dtype=int)
@@ -81,7 +93,21 @@ async def main() -> None:
     X_train, y_train, X_val, y_val, X_test, y_test = deterministic_split(X, y)
     print(f"train={len(X_train)} val={len(X_val)} test={len(X_test)}")
 
-    trainer = ModelTrainer(model_type="xgboost")
+    # positive_rate was computed above but never fed into training -- the
+    # classifier saw an imbalanced label with no correction. scale_pos_weight
+    # is XGBoost's standard fix (ratio of negative to positive training rows).
+    n_pos = int(y_train.sum())
+    n_neg = len(y_train) - n_pos
+    scale_pos_weight = n_neg / n_pos if n_pos > 0 else 1.0
+    print(f"scale_pos_weight={scale_pos_weight:.4f}")
+
+    # eval_metric defaults to "mlogloss" (multiclass) in XGBoostWrapper, wrong
+    # for this binary task -- harmless before since eval_set was never passed
+    # to fit(), now that it is, XGBoost actually evaluates it and errors.
+    trainer = ModelTrainer(
+        model_type="xgboost",
+        parameters={"scale_pos_weight": scale_pos_weight, "eval_metric": "logloss"},
+    )
     result = await trainer.train(
         model_name="gdelt-disruption-risk-classifier",
         X_train=X_train, y_train=y_train,

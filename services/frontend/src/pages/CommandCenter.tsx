@@ -20,14 +20,18 @@ import SignalWhy from "@/components/SignalWhy";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchResponseTelemetry,
   fetchSignals,
   respondToSignal,
+  recordEvidenceApproval,
   type CommandResponseBundle,
 } from "@/lib/api-intelligence";
 import type { DisruptionSignal } from "@/types/intelligence";
+import { fetchEntities } from "@/lib/api-energy";
+import type { Refinery } from "@/types/energy";
 
 const STAGES = [
   { key: "signal", label: "Signal", icon: Radio },
@@ -61,6 +65,7 @@ export default function CommandCenter() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [bundle, setBundle] = useState<CommandResponseBundle | null>(null);
+  const [refineryUuid, setRefineryUuid] = useState<string>("");
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -74,6 +79,12 @@ export default function CommandCenter() {
     queryKey: ["cc-telemetry"],
     queryFn: fetchResponseTelemetry,
     refetchInterval: 30000,
+  });
+
+  const { data: refineryData } = useQuery({
+    queryKey: ["cc-refineries"],
+    queryFn: () => fetchEntities<Refinery>("refineries", { limit: 100 }),
+    staleTime: 60_000,
   });
 
   const respond = useMutation({
@@ -91,7 +102,15 @@ export default function CommandCenter() {
         description: `Scenario: ${data.scenario.name}`,
       });
     },
-    onError: (err: Error & { response?: { data?: { detail?: string } } }) => {
+    onError: (err: Error & { response?: { status?: number; data?: { detail?: string } } }) => {
+      if (err.response?.status === 402) {
+        toast({
+          title: "Premium feature",
+          description: "The full response pipeline (signal → scenario → SPR → procurement) requires a Premium account. Upgrade from your Profile page to run it.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Response pipeline failed",
         description: err.response?.data?.detail ?? err.message,
@@ -112,17 +131,20 @@ export default function CommandCenter() {
   const activeStage = bundle ? STAGES.length : running ? Math.min(1 + Math.floor(elapsed / 8), STAGES.length - 1) : 0;
 
   const signals: DisruptionSignal[] = signalData?.items ?? [];
+  const refineries = refineryData?.items ?? [];
+  const responseTarget = refineryUuid ? { refinery_uuid: refineryUuid } : {};
   const impacts = bundle?.twin_run.aggregate_impacts ?? {};
   const sprResults = (bundle?.spr_run as { results?: Record<string, number> })?.results ?? {};
   const sprRecs =
     (bundle?.spr_run as { recommendations?: { title: string; summary: string; severity: string }[] })
       ?.recommendations ?? [];
   const proc = (bundle?.procurement_run ?? {}) as Record<string, number | string>;
+  const evidence = bundle?.evidence_bundle;
 
   return (
     <AppShell
       title="Command Center"
-      subtitle="From live disruption signal to executable procurement decision — one click, real latency"
+      subtitle="From disruption signal to decision support — source status and assumptions included"
     >
       <div className="mb-6">
         <CorridorRiskStrip />
@@ -135,17 +157,30 @@ export default function CommandCenter() {
             <CardTitle className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2">
                 <Radio className="h-4 w-4 animate-pulse text-destructive" />
-                Live Disruption Signals
+                Disruption Signals
               </span>
               <Button
                 size="sm"
                 disabled={running}
-                onClick={() => respond.mutate({ auto: true })}
+                onClick={() => respond.mutate({ auto: true, ...responseTarget })}
               >
                 {running ? <Loader2 className="h-4 w-4 animate-spin" /> : "Respond to top threat"}
               </Button>
             </CardTitle>
           </CardHeader>
+          <CardContent className="space-y-2 pb-0">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Refinery target</label>
+            <Select value={refineryUuid || "none"} onValueChange={(value) => setRefineryUuid(value === "none" ? "" : value)} disabled={running}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="National view (no refinery target)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">National view (no refinery target)</SelectItem>
+                {refineries.map((refinery) => (
+                  <SelectItem key={refinery.uuid} value={refinery.uuid}>{refinery.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">A target records its capacity and grade constraints. Supplier cargo grades still require verification.</p>
+          </CardContent>
           <CardContent className="max-h-[520px] space-y-2 overflow-y-auto">
             {signals.length === 0 && (
               <p className="py-6 text-center text-xs text-muted-foreground">
@@ -172,7 +207,7 @@ export default function CommandCenter() {
                     size="sm"
                     className="h-6 px-2 text-[10px]"
                     disabled={running}
-                    onClick={() => respond.mutate({ signal_uuid: s.uuid })}
+                    onClick={() => respond.mutate({ signal_uuid: s.uuid, ...responseTarget })}
                   >
                     Respond
                   </Button>
@@ -242,8 +277,7 @@ export default function CommandCenter() {
                     {bundle.telemetry.pipeline_latency_seconds}s
                   </p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Industry benchmark for supply-shock response: ~47 days (McKinsey).
-                    Scenario applied: {bundle.scenario.name}.
+                    Scenario applied: {bundle.scenario.name}. Review source status and assumptions before acting.
                   </p>
                 </div>
               )}
@@ -334,6 +368,39 @@ export default function CommandCenter() {
                   </CardContent>
                 </Card>
               </div>
+
+              {evidence && (
+                <Card className="rounded-2xl border-border bg-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-xs">
+                      <CheckCircle2 className="h-4 w-4 text-primary" /> Decision evidence
+                      <Badge variant="outline" className="ml-auto text-[10px] uppercase">{evidence.mode}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Bundle {evidence.uuid}. This is decision support; a human must approve any procurement action.
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {evidence.input_provenance.map((source) => (
+                        <div key={source.source} className="rounded-lg border border-border bg-background p-2 text-[10px]">
+                          <div className="flex justify-between gap-2 font-medium"><span>{source.display_name}</span><span className="uppercase">{source.mode}</span></div>
+                          <p className="mt-1 text-muted-foreground">
+                            {source.fallback_reason || (source.observed_at ? `Observed ${new Date(source.observed_at).toLocaleString()}` : "No observation timestamp")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => recordEvidenceApproval(evidence.uuid, { status: "reviewed", actor: "operator" })
+                        .then(() => toast({ title: "Decision marked reviewed" }))
+                        .catch(() => toast({ title: "Could not record review", variant: "destructive" }))}
+                    >Mark reviewed</Button>
+                  </CardContent>
+                </Card>
+              )}
 
               <div className="flex flex-wrap gap-3">
                 <Button asChild variant="outline" size="sm" className="gap-2">

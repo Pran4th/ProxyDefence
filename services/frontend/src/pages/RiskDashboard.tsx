@@ -221,7 +221,7 @@ const RiskDashboardPage = () => {
           variant="default"
         />
         <MetricCard
-          title="Live AIS Vessels"
+          title="AIS Snapshot Vessels"
           value={aisVessels.length}
           icon={Ship}
           variant="default"
@@ -396,7 +396,7 @@ const RiskDashboardPage = () => {
           </CardContent>
         </Card>
 
-        {/* Chokepoint Tanker Traffic (real AIS) */}
+        {/* Chokepoint Tanker Traffic (snapshot-backed AIS) */}
         <Card className="rounded-[1.75rem] border-border bg-card shadow-elevation lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-sm">
@@ -405,7 +405,7 @@ const RiskDashboardPage = () => {
                 Chokepoint Tanker Traffic
               </span>
               <span className="text-[10px] font-normal text-muted-foreground">
-                live AISstream{aisSnapshotAt ? ` · ${aisSnapshotAt.slice(0, 16)}` : ""}
+                AIS snapshot{aisSnapshotAt ? ` · ${aisSnapshotAt.slice(0, 16)}` : ""}
               </span>
             </CardTitle>
           </CardHeader>

@@ -14,6 +14,7 @@ from models import ASSET_TYPE_BY_TABLE
 from backend.shared.logging_config import get_logger
 from services.risk_engine import (
     ArticleSignalIngestor,
+    AISIngestor,
     CommodityPriceIngestor,
     RiskScoringEngine,
     SignalDetector,
@@ -278,12 +279,12 @@ async def trigger_sanctions_ingest() -> None:
 
 
 @router.post("/ingest/ais")
-async def trigger_ais_ingest() -> None:
-    raise HTTPException(
-        status_code=501,
-        detail="Not wired to a live AIS source yet. This previously generated simulated vessel/"
-               "congestion data and has been disabled rather than continue serving fake positions.",
-    )
+async def trigger_ais_ingest(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict[str, Any]:
+    """Persist the collector's AIS snapshot as cached data, never as live data."""
+    created = await AISIngestor(pool).ingest()
+    return {"source": "ais_chokepoints", "mode": "cached", "rows_written": created}
 
 
 @router.post("/ingest/news-signals")
@@ -301,12 +302,24 @@ async def trigger_all_ingestors(
 ) -> dict[str, Any]:
     signal_count = await ArticleSignalIngestor(pool).ingest()
     price_count = await CommodityPriceIngestor(pool).ingest()
+    ais_count = await AISIngestor(pool).ingest()
     return {
         "news_signals": {"signals_created": signal_count},
         "commodity_prices": {"rows_written": price_count},
-        "sanctions": "not wired to a live source -- see /ingest/sanctions",
-        "ais": "not wired to a live source -- see /ingest/ais",
+        "sanctions": "disabled: country-level aggregation is not wired to a live source",
+        "ais": {"mode": "cached", "rows_written": ais_count},
     }
+
+
+@router.get("/sources/status")
+async def source_status(pool: asyncpg.Pool = Depends(get_pool)) -> dict[str, Any]:
+    """Source freshness and mode, intended for UI badges and evidence bundles."""
+    rows = await pool.fetch(
+        """SELECT source_key, display_name, mode, observed_at, ingested_at,
+                  freshness_seconds, fallback_reason, source_url, metadata, updated_at
+           FROM energy.intelligence_source_status ORDER BY source_key"""
+    )
+    return {"items": [_row_to_dict(row) for row in rows], "total": len(rows)}
 
 
 # ── Commodity prices view ───────────────────────────────────────────────────
@@ -465,6 +478,9 @@ async def get_article_impact(
     return {"has_impact_data": True, "signals": signals}
 
 
+_SEVERITY_RANK = {"critical": 4, "high": 3, "elevated": 2, "moderate": 1, "low": 0}
+
+
 @router.get("/impact-feed")
 async def get_impact_feed(
     limit: int = Query(15, ge=1, le=50),
@@ -475,9 +491,19 @@ async def get_impact_feed(
     exposure estimate pre-computed. One CorridorRiskEngine instance is
     reused across every signal in the batch so the corridor blend, live
     Brent price, and national demand are each fetched once per request,
-    not once per signal (see CorridorRiskEngine's caching)."""
+    not once per signal (see CorridorRiskEngine's caching).
+
+    Multiple articles about the same real-world event routinely match the
+    same corridor within the same day (ArticleSignalIngestor dedupes per
+    article, not across articles covering one event), which made the feed
+    look repetitive -- N near-identical cards for one event. Signals are
+    grouped by (matched corridor, day) and collapsed to one representative
+    card noting how many signals fed into it."""
     from services.corridor_risk import CorridorRiskEngine
 
+    # Over-fetch so there's enough raw signal pool left to fill `limit`
+    # distinct groups after collapsing near-duplicates.
+    fetch_limit = min(limit * 4, 80)
     rows = await pool.fetch(
         """SELECT * FROM energy.disruption_signals
            WHERE expires_at > NOW()
@@ -490,22 +516,39 @@ async def get_impact_feed(
                     END DESC,
                     created_at DESC
            LIMIT $1""",
-        limit,
+        fetch_limit,
     )
 
     engine = CorridorRiskEngine(pool)
-    items = []
+    groups: dict[tuple[Any, Any], dict[str, Any]] = {}
     for r in rows:
         explanation = await engine.explain_signal(_row_to_dict(r))
-        items.append({
+        group_key = (explanation.get("matched_corridor"), r["created_at"].date())
+        candidate = {
             "signal_uuid": str(r["uuid"]),
             "title": r["title"],
             "severity": r["severity"],
             "risk_dimension": r["risk_dimension"],
             "source": r["source"],
             "detected_at": r["created_at"].isoformat(),
+            "based_on_signals": 1,
             **explanation,
-        })
+        }
+        existing = groups.get(group_key)
+        if existing is None:
+            groups[group_key] = candidate
+        else:
+            existing["based_on_signals"] += 1
+            if _SEVERITY_RANK.get(r["severity"], 0) > _SEVERITY_RANK.get(existing["severity"], 0):
+                # keep the count, swap in the higher-severity signal as the representative
+                candidate["based_on_signals"] = existing["based_on_signals"]
+                groups[group_key] = candidate
+
+    items = sorted(
+        groups.values(),
+        key=lambda it: (_SEVERITY_RANK.get(it["severity"], 0), it["detected_at"]),
+        reverse=True,
+    )[:limit]
 
     return {
         "items": items,

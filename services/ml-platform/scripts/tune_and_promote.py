@@ -23,8 +23,9 @@ from training.trainer import ModelTrainer  # noqa: E402
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-N_TRIALS = 20
+N_TRIALS = 50
 SEED = 42
+EARLY_STOPPING_ROUNDS = 20
 
 
 def _xgb_search_space(trial: optuna.Trial) -> dict:
@@ -45,12 +46,18 @@ async def tune_risk_classifier() -> dict:
     X, y = load_features()
     X_train, y_train, X_val, y_val, _, _ = deterministic_split(X, y)
 
+    n_pos = int(y_train.sum())
+    n_neg = len(y_train) - n_pos
+    scale_pos_weight = n_neg / n_pos if n_pos > 0 else 1.0
+
     def objective(trial: optuna.Trial) -> float:
         params = _xgb_search_space(trial)
         params["eval_metric"] = "logloss"
+        params["early_stopping_rounds"] = EARLY_STOPPING_ROUNDS
+        params["scale_pos_weight"] = scale_pos_weight
         from training.models import XGBoostWrapper
         model = XGBoostWrapper(random_state=SEED, **params)
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train, eval_set=[(X_val, y_val)])
         from evaluation.classification import evaluate_classification
         proba = model.predict_proba(X_val)
         preds = model.predict(X_val)
@@ -61,7 +68,9 @@ async def tune_risk_classifier() -> dict:
     study.optimize(objective, n_trials=N_TRIALS, show_progress_bar=False)
     print(f"  best val_roc_auc from tuning: {study.best_value:.4f} (params: {study.best_params})")
 
-    trainer = ModelTrainer(model_type="xgboost", parameters=study.best_params)
+    best_params = {**study.best_params, "eval_metric": "logloss",
+                   "early_stopping_rounds": EARLY_STOPPING_ROUNDS, "scale_pos_weight": scale_pos_weight}
+    trainer = ModelTrainer(model_type="xgboost", parameters=best_params)
     result = await trainer.train(
         model_name="gdelt-disruption-risk-classifier",
         X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val,
@@ -77,9 +86,10 @@ async def tune_procurement_ranker() -> dict:
 
     def objective(trial: optuna.Trial) -> float:
         params = _xgb_search_space(trial)
+        params["early_stopping_rounds"] = EARLY_STOPPING_ROUNDS
         from training.models import XGBoostRegressorWrapper
         model = XGBoostRegressorWrapper(random_state=SEED, **params)
-        model.fit(train[feature_cols], train["outcome_score"])
+        model.fit(train[feature_cols], train["outcome_score"], eval_set=[(val[feature_cols], val["outcome_score"])])
         preds = model.predict(val[feature_cols])
         from evaluation.regression import evaluate_regression
         return evaluate_regression(val["outcome_score"], preds).get("r2", -1e9)
@@ -88,7 +98,8 @@ async def tune_procurement_ranker() -> dict:
     study.optimize(objective, n_trials=N_TRIALS, show_progress_bar=False)
     print(f"  best val_r2 from tuning: {study.best_value:.4f} (params: {study.best_params})")
 
-    trainer = ModelTrainer(model_type="xgboost_regressor", task="regression", parameters=study.best_params)
+    best_params = {**study.best_params, "early_stopping_rounds": EARLY_STOPPING_ROUNDS}
+    trainer = ModelTrainer(model_type="xgboost_regressor", task="regression", parameters=best_params)
     result = await trainer.train(
         model_name="procurement-option-ranker",
         X_train=train[feature_cols], y_train=train["outcome_score"],
@@ -110,9 +121,10 @@ async def tune_price_forecaster() -> dict:
 
     def objective(trial: optuna.Trial) -> float:
         params = _xgb_search_space(trial)
+        params["early_stopping_rounds"] = EARLY_STOPPING_ROUNDS
         from training.models import XGBoostRegressorWrapper
         model = XGBoostRegressorWrapper(random_state=SEED, **params)
-        model.fit(train[feature_cols], train["target_next_ret"])
+        model.fit(train[feature_cols], train["target_next_ret"], eval_set=[(val[feature_cols], val["target_next_ret"])])
         preds = model.predict(val[feature_cols])
         from evaluation.regression import evaluate_regression
         return evaluate_regression(val["target_next_ret"], preds).get("r2", -1e9)
@@ -121,7 +133,8 @@ async def tune_price_forecaster() -> dict:
     study.optimize(objective, n_trials=N_TRIALS, show_progress_bar=False)
     print(f"  best val_r2 from tuning: {study.best_value:.4f} (params: {study.best_params})")
 
-    trainer = ModelTrainer(model_type="xgboost_regressor", task="regression", parameters=study.best_params)
+    best_params = {**study.best_params, "early_stopping_rounds": EARLY_STOPPING_ROUNDS}
+    trainer = ModelTrainer(model_type="xgboost_regressor", task="regression", parameters=best_params)
     result = await trainer.train(
         model_name="fuel-price-forecaster",
         X_train=train[feature_cols], y_train=train["target_next_ret"],
@@ -141,9 +154,10 @@ async def tune_brent_shock() -> dict:
 
     def objective(trial: optuna.Trial) -> float:
         params = _xgb_search_space(trial)
+        params["early_stopping_rounds"] = EARLY_STOPPING_ROUNDS
         from training.models import XGBoostRegressorWrapper
         model = XGBoostRegressorWrapper(random_state=SEED, **params)
-        model.fit(train[FEATURES], train["target_fwd_vol"])
+        model.fit(train[FEATURES], train["target_fwd_vol"], eval_set=[(val[FEATURES], val["target_fwd_vol"])])
         preds = model.predict(val[FEATURES])
         from evaluation.regression import evaluate_regression
         return evaluate_regression(val["target_fwd_vol"], preds).get("r2", -1e9)
@@ -152,7 +166,8 @@ async def tune_brent_shock() -> dict:
     study.optimize(objective, n_trials=N_TRIALS, show_progress_bar=False)
     print(f"  best val_r2 from tuning: {study.best_value:.4f} (params: {study.best_params})")
 
-    trainer = ModelTrainer(model_type="xgboost_regressor", task="regression", parameters=study.best_params)
+    best_params = {**study.best_params, "early_stopping_rounds": EARLY_STOPPING_ROUNDS}
+    trainer = ModelTrainer(model_type="xgboost_regressor", task="regression", parameters=best_params)
     result = await trainer.train(
         model_name="brent-shock-forecaster",
         X_train=train[FEATURES], y_train=train["target_fwd_vol"],

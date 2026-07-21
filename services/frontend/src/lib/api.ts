@@ -133,6 +133,7 @@ export interface AuthUser {
   organization?: string | null;
   location?: string | null;
   notification_preferences?: NotificationPreferences;
+  tier?: "free" | "premium";
   created_at: string;
 }
 export interface Event {
@@ -244,24 +245,29 @@ export interface EnergyImpact {
   total_energy_articles: number;
 }
 
+export interface CopilotCitation {
+  source_id: string;
+  source_type: string;
+  title: string;
+  relevance: number;
+  url: string | null;
+  snippet: string | null;
+}
+
+// Matches what backend/api/copilot/service.py::CopilotService.query() actually
+// returns -- articles/entities/relationships/threat_level/energy_impact were
+// an aspirational shape from an earlier design that the backend never
+// implemented, so those fields were always undefined and their UI sections
+// never rendered. citations is the one real, populated field.
 export interface CopilotResponse {
   question: string;
   conversation_id: number | null;
-  threat_level: string;
   summary: string;
-  articles: Article[];
-  entities: { entity_text: string; entity_type: string; mentions: number }[];
-  entity_profiles: EntityProfile[];
-  threat_indicators: { military: number; economic: number; diplomatic: number };
-  relationships: {
-    source_entity: string;
-    target_entity: string;
-    relationship_type: string;
-    confidence: number;
-  }[];
-  events: { id: number; title: string; topic: string; risk_level: string; risk_score: number }[];
-  energy_impact?: EnergyImpact;
-  energy_assessment?: string;
+  citations: CopilotCitation[];
+  confidence: number;
+  tool_calls: unknown[];
+  agent_name: string;
+  llm_metrics: { tokens_used: number; latency_ms: number; estimated_cost: number };
 }
 
 export interface CopilotConversation {
@@ -454,6 +460,11 @@ export const updateProfile = async (params: { organization?: string | null; loca
 
 export const updateNotificationPreferences = async (params: NotificationPreferences) => {
   const response = await api.patch<AuthUser>("/auth/me/notifications", params);
+  return response.data;
+};
+
+export const toggleTierBeta = async () => {
+  const response = await api.post<AuthUser>("/auth/me/tier/beta-toggle");
   return response.data;
 };
 

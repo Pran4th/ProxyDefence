@@ -1,5 +1,5 @@
-"""Publishes real-shaped test articles to raw_articles for the Phase 3
-parallel-run validation (compares ml-service's output vs ml-platform's).
+"""Publishes real-shaped test articles to ``raw_articles`` for Kafka-pipeline
+validation of the active ML-platform enrichment consumer.
 
 Run with KAFKA_BOOTSTRAP_SERVERS set:
     .venv/Scripts/python.exe scripts/publish_test_articles.py

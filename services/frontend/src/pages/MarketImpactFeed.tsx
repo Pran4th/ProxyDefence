@@ -15,6 +15,12 @@ const severityTone: Record<string, string> = {
   critical: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
+function probabilityTone(p: number): { text: string; bar: string } {
+  if (p >= 0.7) return { text: "text-destructive", bar: "bg-destructive" };
+  if (p >= 0.45) return { text: "text-warning", bar: "bg-warning" };
+  return { text: "text-success", bar: "bg-success" };
+}
+
 function fmtUsd(v: number | null) {
   if (v == null) return null;
   if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
@@ -77,11 +83,41 @@ export default function MarketImpactFeed() {
                     <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                       <Clock className="h-3 w-3" /> {relativeTime(item.detected_at)}
                     </span>
+                    {item.based_on_signals > 1 && (
+                      <span className="text-[11px] text-muted-foreground">
+                        · based on {item.based_on_signals} signals
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-medium leading-snug">{item.title}</p>
                   <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                     {item.reasoning}
                   </p>
+                  {item.corridor_probability_30d != null && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="h-1 w-24 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full ${probabilityTone(item.corridor_probability_30d).bar}`}
+                          style={{ width: `${Math.round(item.corridor_probability_30d * 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-[10px] font-medium tabular-nums ${probabilityTone(item.corridor_probability_30d).text}`}>
+                        {Math.round(item.corridor_probability_30d * 100)}% 30-day disruption probability
+                      </span>
+                    </div>
+                  )}
+                  {item.corridor_partner_countries.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {item.corridor_partner_countries.slice(0, 6).map((c) => (
+                        <span
+                          key={c}
+                          className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {item.estimated_exposure_usd != null && (
                   <div className="shrink-0 text-right">

@@ -7,7 +7,7 @@ in that service's config.py and import the shared base vars from here.
 
 import os
 
-from backend.shared.config import _required_env
+from backend.shared.config import _required_env, _required_jwt_secret
 
 
 class Settings:
@@ -30,7 +30,7 @@ class Settings:
     )
 
     # ── JWT ───────────────────────────────────────────────────────
-    JWT_SECRET_KEY: str = _required_env("JWT_SECRET_KEY")
+    JWT_SECRET_KEY: str = _required_jwt_secret()
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
         os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
@@ -51,7 +51,7 @@ class Settings:
         "EMBEDDING_SERVICE_URL", "http://embedding-service:8005"
     )
     ENERGY_SERVICE_URL: str = os.getenv(
-        "ENERGY_SERVICE_URL", "http://energy-service:8000"
+        "ENERGY_SERVICE_URL", "http://energy-service:8006"
     )
 
     # ── Logging ───────────────────────────────────────────────────

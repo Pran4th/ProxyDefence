@@ -4,7 +4,6 @@ Write-Host "Starting all backend services in separate windows..." -ForegroundCol
 
 $services = @(
     @{Name="Ingest";        Script="start-ingest.ps1"},
-    @{Name="ML";            Script="start-ml.ps1"},
     @{Name="Embedding";     Script="start-embedding.ps1"},
     @{Name="Database";      Script="start-database.ps1"},
     @{Name="Energy";        Script="start-energy.ps1"},
@@ -13,7 +12,7 @@ $services = @(
 
 foreach ($svc in $services) {
     $scriptPath = Join-Path $PSScriptRoot $svc.Script
-    Start-Process powershell -ArgumentList "-NoExit", "-File", $scriptPath -WindowStyle Normal
+    Start-Process powershell -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $scriptPath -WindowStyle Hidden
     Write-Host "  $($svc.Name): started" -ForegroundColor Green
     Start-Sleep -Milliseconds 500
 }
@@ -21,7 +20,7 @@ foreach ($svc in $services) {
 Write-Host ""
 Write-Host "Modular API (depends on postgres/elastic):" -ForegroundColor Yellow
 $modScript = Join-Path $PSScriptRoot "start-modular-api.ps1"
-Start-Process powershell -ArgumentList "-NoExit", "-File", $modScript -WindowStyle Normal
+Start-Process powershell -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $modScript -WindowStyle Hidden
 Write-Host "  Modular API: started" -ForegroundColor Green
 
 Write-Host ""

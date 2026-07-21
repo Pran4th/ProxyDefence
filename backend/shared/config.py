@@ -36,3 +36,23 @@ def _required_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
+
+
+def _required_jwt_secret() -> str:
+    """Return the JWT secret and reject template-grade values outside local development.
+
+    Local development may still use a deliberately supplied short test secret so
+    isolated unit tests remain simple. Staging and production must fail closed
+    rather than silently issuing tokens with the example value.
+    """
+    value = _required_env("JWT_SECRET_KEY")
+    environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+    placeholder_values = {"change-me", "replace-me", "secret", "password"}
+    if environment in {"staging", "production"} and (
+        len(value) < 32 or value.strip().lower() in placeholder_values
+    ):
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be a unique, high-entropy secret of at least "
+            "32 characters when ENVIRONMENT is staging or production"
+        )
+    return value

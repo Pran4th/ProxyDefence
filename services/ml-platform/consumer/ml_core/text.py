@@ -23,9 +23,18 @@ def build_full_text(article: dict) -> str:
 
 
 def build_dedupe_key(article: dict, full_text: str) -> str:
-    source = article.get("source", "")
-    url = article.get("url", "")
-    base = normalize_text(f"{url}|{source}|{full_text[:500]}")
+    """Content-only key so wire-syndicated stories collapse to one row.
+
+    Previously mixed in url/source, which defeats the point of dedup: the
+    same AP/Reuters story gets republished verbatim (identical content_hash)
+    under a different URL on every local affiliate site (e.g. wistv.com,
+    live5news.com, weau.com all ran the same "US to impose 20% toll in
+    Strait of Hormuz" piece) -- each got its own dedupe_key and its own
+    processed_articles row, which then each fanned out into their own
+    ArticleSignalIngestor signals, showing as the same headline repeated
+    many times in the Command Center's live signal feed.
+    """
+    base = normalize_text(full_text[:500])
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 

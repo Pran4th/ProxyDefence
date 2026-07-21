@@ -49,6 +49,7 @@ import {
   Zap,
   FileText,
   Play,
+  Sparkles,
 } from "lucide-react";
 
 import {
@@ -79,6 +80,11 @@ export default function Procurement() {
 
   const [runUuid, setRunUuid] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  // Raw response from the most recent run -- kept in local state since the
+  // persisted procurement_recommendations rows don't carry ml_predicted_score/
+  // score_divergence (a separate, fixed DB schema). This is the only place
+  // the trained procurement-option-ranker's cross-check is visible.
+  const [lastRunRecommended, setLastRunRecommended] = useState<any>(null);
 
   // New run form
   const [simRunUuid, setSimRunUuid] = useState("");
@@ -120,12 +126,21 @@ export default function Procurement() {
     queryFn: () => fetchExecutiveCards(),
   });
 
-  const mutationErrorToast = (title: string) => (err: any) =>
+  const mutationErrorToast = (title: string) => (err: any) => {
+    if (err?.response?.status === 402) {
+      toast({
+        title: "Premium feature",
+        description: "This action requires a Premium account. Upgrade from your Profile page to run it.",
+        variant: "destructive" as const,
+      });
+      return;
+    }
     toast({
       title,
       description: err?.response?.data?.detail ?? "Could not reach the energy service. Check that it's running.",
       variant: "destructive" as const,
     });
+  };
 
   const enrichMutation = useMutation({
     mutationFn: enrichSuppliers,
@@ -173,6 +188,7 @@ export default function Procurement() {
     onSuccess: (data: any) => {
       setRunUuid(data.run_uuid);
       setSelectedRun(data.run_uuid);
+      setLastRunRecommended(data.recommended ?? null);
       queryClient.invalidateQueries({ queryKey: ["procurement-runs"] });
       queryClient.invalidateQueries({ queryKey: ["procurement-health"] });
       setActiveTab("executive");
@@ -531,6 +547,47 @@ export default function Procurement() {
                     Exec Time: {runDetail.run?.execution_time_ms?.toFixed(0)}ms
                   </CardDescription>
                 </CardHeader>
+              </Card>
+            )}
+
+            {selectedRun === runUuid && lastRunRecommended && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4" /> ML Cross-Check
+                  </CardTitle>
+                  <CardDescription>
+                    The deterministic composite formula picked {lastRunRecommended.supplier_name}. The
+                    trained procurement-option-ranker (a separate XGBoost model using real sanctions/
+                    GDELT-escalation/port-congestion signals) independently scored the same option below
+                    — a second opinion, not a replacement.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap items-center gap-6">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Formula score</p>
+                      <p className="text-lg font-semibold">
+                        {(lastRunRecommended.composite_score * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">ML cross-check</p>
+                      <p className="text-lg font-semibold">
+                        {lastRunRecommended.ml_predicted_score != null
+                          ? `${(lastRunRecommended.ml_predicted_score * 100).toFixed(1)}%`
+                          : "unavailable"}
+                      </p>
+                    </div>
+                    {lastRunRecommended.score_divergence != null && (
+                      <Badge variant={lastRunRecommended.scores_diverge ? "destructive" : "outline"}>
+                        {lastRunRecommended.scores_diverge
+                          ? "Formula and model disagree — worth a second look"
+                          : `Δ ${(lastRunRecommended.score_divergence * 100).toFixed(1)}pp — models agree`}
+                      </Badge>
+                    )}
+                  </div>
+                </CardContent>
               </Card>
             )}
 

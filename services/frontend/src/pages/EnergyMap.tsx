@@ -99,7 +99,7 @@ const EnergyMap = () => {
   );
   const [selectedAsset, setSelectedAsset] = useState<AssetEntry | null>(null);
 
-  // Live corridor risk (drives corridor line color) and real AIS vessels
+  // Current corridor risk (drives corridor line color) and cached AIS snapshots
   const { data: corridorData } = useQuery({
     queryKey: ["map-corridors"],
     queryFn: fetchCorridorRisk,
@@ -232,7 +232,7 @@ const EnergyMap = () => {
         },
       });
 
-      // Real AIS vessel positions
+      // Cached AIS vessel positions
       map.addSource("vessels", { type: "geojson", data: empty });
       map.addLayer({
         id: "vessel-points",
@@ -354,7 +354,7 @@ const EnergyMap = () => {
     });
   }, [corridorData, mapReady]);
 
-  // Push real AIS vessels into the vessel source
+  // Push cached AIS vessels into the vessel source
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !aisData) return;
@@ -397,7 +397,7 @@ const EnergyMap = () => {
   };
 
   return (
-    <AppShell title="Energy Supply Map" subtitle="India's import corridors, live corridor risk, and real AIS tanker traffic">
+    <AppShell title="Energy Supply Map" subtitle="India's import corridors, current risk scores, and AIS snapshot traffic">
       <div className="flex flex-col gap-4 lg:flex-row">
         <div className="w-full lg:w-64 shrink-0">
           <div className="rounded-2xl border border-border bg-card p-4">
@@ -437,11 +437,11 @@ const EnergyMap = () => {
               </p>
               <p className="text-xs text-muted-foreground">
                 <span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#22d3ee]" />
-                {aisData?.total ?? 0} live AIS vessels
+                {aisData?.total ?? 0} AIS vessels in the latest snapshot
                 {aisData?.snapshot_at ? ` · ${aisData.snapshot_at.slice(0, 16)}` : ""}
               </p>
               <p className="text-xs text-muted-foreground">
-                Corridor lines colored by live 30-day disruption probability
+                Corridor lines colored by the current 30-day disruption score
               </p>
             </div>
           </div>

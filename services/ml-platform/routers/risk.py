@@ -2,7 +2,7 @@
 
 Accepts high-level, human-usable signals (country, media tone, volume) and
 builds the exact feature vector the trained GDELT classifier expects — the
-caller never needs to know the model's 98 dummy columns. Feature order comes
+caller never needs to know the model's 98+ dummy columns. Feature order comes
 from feature_names.json saved at training time.
 """
 from __future__ import annotations
@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import asyncpg
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException
@@ -24,9 +25,41 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/risk", tags=["Risk Scoring"])
 
 MODEL_NAME = "gdelt-disruption-risk-classifier"
-ARTIFACT_DIR = Path("data/artifacts") / MODEL_NAME / "v1"
 
-_cache: dict[str, Any] = {}
+# Keyed by (model_name, version) -- mirrors inference/predictor.py's generic
+# endpoint, which was already production-aware. This endpoint used to load
+# a hardcoded data/artifacts/{MODEL_NAME}/v1/model.joblib regardless of which
+# row was actually marked stage='production' in ml.model_versions; the DB
+# flag was documentation, not a real serving switch. Caching by version means
+# a newly-promoted model gets picked up automatically on the next request
+# instead of requiring a process restart to clear a stale unconditioned cache.
+_cache: dict[str, dict[str, Any]] = {}
+
+
+async def _load_model(pool: asyncpg.Pool) -> tuple[Any, list[str], asyncpg.Record]:
+    mv = await pool.fetchrow(
+        "SELECT id, version, file_path FROM ml.model_versions "
+        "WHERE name = $1 AND stage = 'production' ORDER BY version DESC LIMIT 1",
+        MODEL_NAME,
+    )
+    if not mv or not mv["file_path"]:
+        raise FileNotFoundError(f"no production model_version with a file_path for {MODEL_NAME}")
+
+    cache_key = f"{MODEL_NAME}_{mv['version']}"
+    if cache_key not in _cache:
+        import joblib
+        # file_path is written by training scripts run on the developer's local
+        # OS (Windows), so it may contain backslashes even though this service
+        # can run in a Linux container -- normalize before resolving.
+        model_path = Path(mv["file_path"].replace("\\", "/"))
+        feature_names_path = model_path.parent / "feature_names.json"
+        _cache[cache_key] = {
+            "model": joblib.load(model_path),
+            "feature_names": json.loads(feature_names_path.read_text()),
+        }
+
+    cached = _cache[cache_key]
+    return cached["model"], cached["feature_names"], mv
 
 
 class DisruptionScoreRequest(BaseModel):
@@ -40,14 +73,6 @@ class DisruptionScoreRequest(BaseModel):
     is_root_event: int = Field(1, ge=0, le=1)
     entity_type: str | None = None
     entity_uuid: str | None = None
-
-
-def _load_model():
-    if "model" not in _cache:
-        import joblib
-        _cache["model"] = joblib.load(ARTIFACT_DIR / "model.joblib")
-        _cache["feature_names"] = json.loads((ARTIFACT_DIR / "feature_names.json").read_text())
-    return _cache["model"], _cache["feature_names"]
 
 
 def _build_vector(req: DisruptionScoreRequest, feature_names: list[str]) -> pd.DataFrame:
@@ -75,8 +100,9 @@ def _build_vector(req: DisruptionScoreRequest, feature_names: list[str]) -> pd.D
 
 @router.post("/disruption-score")
 async def disruption_score(req: DisruptionScoreRequest) -> dict[str, Any]:
+    pool = await get_pool()
     try:
-        model, feature_names = _load_model()
+        model, feature_names, mv = await _load_model(pool)
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"model artifact not available: {e}")
 
@@ -84,25 +110,19 @@ async def disruption_score(req: DisruptionScoreRequest) -> dict[str, Any]:
     proba = model.predict_proba(X)[0]
     score = float(proba[1])  # P(escalation)
 
-    pool = await get_pool()
-    mv = await pool.fetchrow(
-        "SELECT id, version FROM ml.model_versions WHERE name=$1 AND stage='production' "
-        "ORDER BY version DESC LIMIT 1", MODEL_NAME,
+    await pool.execute(
+        "INSERT INTO ml.predictions (model_version_id, model_name, model_version, input_data, "
+        "prediction, confidence, probabilities, latency_ms) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+        mv["id"], MODEL_NAME, mv["version"], req.model_dump(),
+        score, float(np.max(proba)),
+        {"no_escalation": round(float(proba[0]), 4), "escalation": round(score, 4)}, 0.0,
     )
-    if mv:
-        await pool.execute(
-            "INSERT INTO ml.predictions (model_version_id, model_name, model_version, input_data, "
-            "prediction, confidence, probabilities, latency_ms) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-            mv["id"], MODEL_NAME, mv["version"], req.model_dump(),
-            score, float(np.max(proba)),
-            {"no_escalation": round(float(proba[0]), 4), "escalation": round(score, 4)}, 0.0,
-        )
 
     return {
         "prediction": round(score, 4),
         "confidence": round(float(np.max(proba)), 4),
         "probabilities": {"no_escalation": round(float(proba[0]), 4), "escalation": round(score, 4)},
         "model_name": MODEL_NAME,
-        "model_version": mv["version"] if mv else None,
+        "model_version": mv["version"],
         "feature_version": 1,
     }

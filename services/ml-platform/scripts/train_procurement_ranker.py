@@ -77,6 +77,15 @@ async def main() -> None:
     for k, v in result.items():
         print(f"  {k}: {v}")
 
+    # Persist the exact feature column order next to the artifact, same
+    # pattern train_risk_classifier.py uses -- lets a serving caller (energy-
+    # service's optimizer.py) build a vector by name instead of hand-
+    # maintaining a column-order list that can silently drift from training.
+    import json
+    artifact_dir = Path("data/artifacts") / "procurement-option-ranker" / "v1"
+    (artifact_dir / "feature_names.json").write_text(json.dumps(feature_cols))
+    print(f"feature names saved -> {artifact_dir / 'feature_names.json'} ({len(feature_cols)} features)")
+
     # Ranking sanity check on held-out scenarios: how often does the model's
     # top-ranked supplier match the actual best outcome in that scenario?
     from training.models import REGRESSION_MODEL_REGISTRY

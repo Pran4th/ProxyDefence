@@ -168,6 +168,10 @@ export interface EntityRelationship {
   valid_from?: string;
   valid_to?: string;
   metadata?: Record<string, unknown>;
+  source_name?: string | null;
+  source_country?: string | null;
+  target_name?: string | null;
+  target_country?: string | null;
 }
 
 export interface InfrastructureEvent {

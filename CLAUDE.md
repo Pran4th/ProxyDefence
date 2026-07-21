@@ -270,9 +270,10 @@ and environment variables are pre-configured.
 
 ### Production Deployment
 
-```bash
-docker compose -f docker-compose.full.yml up --build -d
-```
+AWS EC2, venv-based — mirrors local dev exactly (infra via `docker compose up -d`,
+services in venvs under systemd, frontend built + served by nginx). There is
+deliberately **no app-in-Docker build** (torch makes ml-platform's image slow and
+fragile). Full runbook: `docs/05_DEPLOYMENT.md`.
 
 ### Research
 

@@ -9,8 +9,6 @@ from backend.shared.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-INDIA_DEMAND_BPD = 5000000  # ~5M bpd India consumption
-
 
 class NetworkGraph:
     """Builds and manages the supply chain directed weighted graph from existing entity data."""
@@ -34,7 +32,7 @@ class NetworkGraph:
             ("pipelines", "pipeline", "capacity_bpd", None),
             ("refineries", "refinery", "capacity_bpd", None),
             ("storage_facilities", "storage", None, "capacity_barrels"),
-            ("strategic_petroleum_reserves", "spr", "max_drawdown_bpd", "capacity_barrels"),
+            ("strategic_petroleum_reserves", "spr", "max_drawdown_rate_bpd", "capacity_barrels"),
             ("suppliers", "producer", "market_share_pct", None),
             ("shipping_routes", "shipping", None, None),
             ("power_plants", "power_generator", "capacity_mw", None),
@@ -71,7 +69,7 @@ class NetworkGraph:
                         row.get("latitude"), row.get("longitude"),
                         cap, storage,
                         row.get("current_inventory_barrels") if "current_inventory_barrels" in row else None,
-                        row.get("max_drawdown_bpd") if "max_drawdown_bpd" in row else None,
+                        row.get("max_drawdown_rate_bpd") if "max_drawdown_rate_bpd" in row else None,
                         row.get("operational_status", "active"),
                         row.get("criticality", "medium"),
                     )
@@ -152,7 +150,52 @@ class NetworkGraph:
             logger.warning("edge_build_skipped", error=str(exc))
 
         count += await self._build_supply_chain_edges(node_map)
+        count += await self._build_spr_drawdown_edges()
 
+        return count
+
+    async def _build_spr_drawdown_edges(self) -> int:
+        """SPRs only ever get a `located_in -> location` entity_relationships
+        row, never a link to a refinery, so the relationship-driven loop above
+        never creates a `drawdown` edge -- SPR release capacity has never
+        actually been wired into the flow network. Connect each SPR to every
+        refinery in its own country, splitting its drawdown capacity evenly
+        across them, as a defensible proxy until finer-grained SPR->refinery
+        logistics data exists."""
+        count = 0
+        sprs = await self.pool.fetch(
+            """SELECT id, country, max_drawdown_bpd FROM energy.network_nodes
+               WHERE node_type = 'strategic_petroleum_reserve' AND is_deleted = false"""
+        )
+        refineries = await self.pool.fetch(
+            """SELECT id, country FROM energy.network_nodes
+               WHERE node_type = 'refinery' AND is_deleted = false"""
+        )
+        refineries_by_country: dict[str, list[int]] = {}
+        for r in refineries:
+            refineries_by_country.setdefault(r["country"], []).append(r["id"])
+
+        for spr in sprs:
+            targets = refineries_by_country.get(spr["country"], [])
+            if not targets:
+                continue
+            per_target_capacity = (spr["max_drawdown_bpd"] or 0) / len(targets)
+            for target_id in targets:
+                exists = await self.pool.fetchval(
+                    """SELECT id FROM energy.network_edges
+                       WHERE source_node_id = $1 AND target_node_id = $2
+                             AND edge_type = 'drawdown' AND is_deleted = false""",
+                    spr["id"], target_id,
+                )
+                if exists:
+                    continue
+                await self.pool.execute(
+                    """INSERT INTO energy.network_edges
+                       (source_node_id, target_node_id, edge_type, max_capacity_bpd, reliability, commodity_type)
+                       VALUES ($1,$2,'drawdown',$3,0.95,'crude')""",
+                    spr["id"], target_id, per_target_capacity,
+                )
+                count += 1
         return count
 
     async def _get_node_map(self) -> dict[tuple[str, int], int]:
@@ -183,13 +226,25 @@ class NetworkGraph:
         return mappings.get((source_type, target_type), "crude_flow")
 
     async def _estimate_capacity(self, source_type: str, source_id: int) -> float | None:
+        if source_type == "strategic_petroleum_reserve":
+            # This table has no capacity_bpd/production_bpd/throughput_mtpa columns
+            # at all -- only max_drawdown_rate_bpd -- so the generic query below
+            # would raise UndefinedColumnError and silently return None via the
+            # broad except. Special-cased so SPR drawdown edges get real capacity.
+            try:
+                return await self.pool.fetchval(
+                    "SELECT max_drawdown_rate_bpd FROM energy.strategic_petroleum_reserves WHERE id = $1",
+                    source_id,
+                )
+            except Exception:
+                return None
         try:
             row = await self.pool.fetchrow(
-                f"SELECT capacity_bpd, production_bpd, throughput_mtpa, max_drawdown_bpd FROM energy.{source_type}s WHERE id = $1",
+                f"SELECT capacity_bpd, production_bpd, throughput_mtpa FROM energy.{source_type}s WHERE id = $1",
                 source_id,
             )
             if row:
-                return row.get("capacity_bpd") or row.get("production_bpd") or row.get("throughput_mtpa") or row.get("max_drawdown_bpd")
+                return row.get("capacity_bpd") or row.get("production_bpd") or row.get("throughput_mtpa")
         except Exception:
             pass
         return None

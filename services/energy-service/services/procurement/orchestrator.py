@@ -73,6 +73,7 @@ class ProcurementOrchestrator:
         max_cost_bbl: float = 100.0,
         max_risk_score: float = 0.8,
         max_lead_days: int = 60,
+        refinery_target: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Execute a full procurement optimization run."""
         t0 = time.time()
@@ -117,6 +118,19 @@ class ProcurementOrchestrator:
             "value": optimization_goal,
             "type": "parameter", "source": "user",
         })
+        if refinery_target:
+            assumptions.append({
+                "key": "target_refinery",
+                "value": json.dumps({
+                    "uuid": refinery_target["uuid"],
+                    "name": refinery_target["name"],
+                    "country": refinery_target.get("country"),
+                    "capacity_bpd": refinery_target.get("capacity_bpd"),
+                    "nelson_complexity_index": refinery_target.get("nelson_complexity_index"),
+                    "crude_types_accepted": refinery_target.get("crude_types_accepted") or [],
+                }),
+                "type": "operator_target", "source": "energy_catalog",
+            })
         assumptions.append({
             "key": "max_cost_bbl",
             "value": str(max_cost_bbl),
@@ -159,14 +173,16 @@ class ProcurementOrchestrator:
         pareto_options = opt_result.get("pareto_frontier", [])
         recommended = opt_result.get("recommended")
 
-        total_risk = 0.0
+        # Options are alternatives, not additive purchase commitments. The
+        # selected recommendation is the only committed allocation in this
+        # first-pass optimiser; summing every option previously inflated the
+        # reported volume and annual cost by the number of alternatives.
         for o in opt_result.get("options", []):
             await self._create_recommendation(run_uuid, o, supply_gap_bpd, optimization_goal)
-            total_risk += o.get("risk_score", 0) * o.get("volume_bpd", 0)
-
-        total_volume = sum(o.get("volume_bpd", 0) for o in opt_result.get("options", []))
-        total_cost = sum(o.get("total_annual_cost_usd", 0) for o in opt_result.get("options", []))
-        avg_risk = total_risk / total_volume if total_volume > 0 else 0
+        selected = recommended or {}
+        total_volume = min(float(selected.get("volume_bpd", 0) or 0), float(supply_gap_bpd or 0))
+        total_cost = float(selected.get("total_annual_cost_usd", 0) or 0)
+        avg_risk = float(selected.get("risk_score", 0) or 0)
 
         exec_summary = self._generate_executive_summary(
             name, supply_gap_bpd, opt_result, optimization_goal,
@@ -202,6 +218,7 @@ class ProcurementOrchestrator:
             "pareto_count": len(pareto_options),
             "executive_summary": exec_summary,
             "recommended": recommended,
+            "target_refinery": refinery_target,
             "execution_time_ms": round(elapsed, 2),
         }
 
@@ -312,12 +329,12 @@ class ProcurementOrchestrator:
                 "severity": "info",
                 "category": "supplier_strategy",
                 "financial_impact": {
-                    "recommended_cost_bbl": recommended["cost_bbl"] if recommended else 0,
-                    "recommended_annual_cost": recommended["total_annual_cost_usd"] if recommended else 0,
+                    "recommended_cost_bbl": recommended["cost_bbl"],
+                    "recommended_annual_cost": recommended["total_annual_cost_usd"],
                 },
                 "operational_impact": {
                     "pareto_options": len(pareto),
-                    "recommended_volume_bpd": recommended["volume_bpd"] if recommended else 0,
+                    "recommended_volume_bpd": recommended["volume_bpd"],
                 },
                 "strategic_importance": 0.85,
                 "confidence": 0.75,
@@ -326,6 +343,29 @@ class ProcurementOrchestrator:
                     f"Contract {recommended['supplier_name']} for {recommended['volume_bpd']:,.0f} bpd",
                     f"Negotiate {recommended.get('lead_time_days', 30)}-day delivery terms",
                     "File RFQ for remaining volume across 3 backup suppliers" if len(options) > 1 else "Negotiate exclusive supply agreement",
+                ],
+            } if recommended else {
+                # opt_result["recommended"] is None whenever no option survives
+                # the cost/risk/lead-time filters (e.g. the default
+                # max_cost_bbl=100 vs unenriched suppliers' higher computed
+                # cost) -- this used to crash the whole /run call with an
+                # unhandled TypeError from subscripting None.
+                "title": f"No Viable Supplier Found — {name}",
+                "summary": (
+                    f"{len(options)} option(s) were evaluated but none satisfied the given "
+                    "cost, risk, and lead-time constraints. Try relaxing max_cost_bbl, "
+                    "max_risk_score, or max_lead_days and re-running."
+                ),
+                "severity": "warning",
+                "category": "supplier_strategy",
+                "financial_impact": {"recommended_cost_bbl": 0, "recommended_annual_cost": 0},
+                "operational_impact": {"pareto_options": len(pareto), "recommended_volume_bpd": 0},
+                "strategic_importance": 0.85,
+                "confidence": 0.75,
+                "time_horizon": "short_term",
+                "recommended_actions": [
+                    "Relax max_cost_bbl or max_risk_score and re-run the optimizer",
+                    "Enrich supplier_intelligence (OFAC/GDELT signals) to sharpen risk scoring",
                 ],
             },
         ]
@@ -434,13 +474,13 @@ class ProcurementOrchestrator:
         if not options:
             return f"Procurement run '{name}' found no qualified options for {supply_gap:,.0f} bpd supply gap."
 
-        total_vol = sum(o.get("volume_bpd", 0) for o in options)
-        avg_cost = sum(o.get("cost_bbl", 0) for o in options) / len(options)
+        selected_volume = min(float((recommended or {}).get("volume_bpd", 0) or 0), float(supply_gap))
+        selected_cost = float((recommended or {}).get("cost_bbl", 0) or 0)
 
         summary = (
             f"Procurement optimization '{name}' completed for {supply_gap:,.0f} bpd supply gap. "
             f"Evaluated {opt_result['total_options']} options across cost, risk, and lead time. "
-            f"Recommended {total_vol:,.0f} bpd at ${avg_cost:.2f}/bbl average. "
+            f"Recommended {selected_volume:,.0f} bpd at ${selected_cost:.2f}/bbl. "
             f"Pareto frontier: {len(pareto)} optimal trade-off options identified. "
         )
 

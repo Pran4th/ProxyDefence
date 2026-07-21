@@ -527,7 +527,34 @@ class CommodityPriceIngestor(DataIngestor):
                         r["unit"], r["change_pct"], r["source"], r["recorded_at"],
                     )
         logger.info("commodity_price_ingest_complete", rows=len(rows))
+        latest_observed = max(r["recorded_at"] for r in rows)
+        await self._record_source_status(
+            pool,
+            source_key="commodity_prices",
+            display_name="Commodity price benchmark",
+            mode="cached",
+            observed_at=latest_observed,
+            fallback_reason="Validated dataset snapshot; no streaming benchmark connector is configured.",
+            source_url=None,
+            metadata={"rows_written": len(rows), "sources": sorted({r["source"] for r in rows})},
+        )
         return len(rows)
+
+    async def _record_source_status(self, pool: asyncpg.Pool, **status: Any) -> None:
+        await pool.execute(
+            """INSERT INTO energy.intelligence_source_status
+               (source_key, display_name, mode, observed_at, ingested_at, freshness_seconds,
+                fallback_reason, source_url, metadata, updated_at)
+               VALUES ($1,$2,$3,$4,NOW(),EXTRACT(EPOCH FROM NOW() - $4),$5,$6,$7,NOW())
+               ON CONFLICT (source_key) DO UPDATE SET
+                   display_name=EXCLUDED.display_name, mode=EXCLUDED.mode,
+                   observed_at=EXCLUDED.observed_at, ingested_at=NOW(),
+                   freshness_seconds=EXCLUDED.freshness_seconds,
+                   fallback_reason=EXCLUDED.fallback_reason, source_url=EXCLUDED.source_url,
+                   metadata=EXCLUDED.metadata, updated_at=NOW()""",
+            status["source_key"], status["display_name"], status["mode"], status["observed_at"],
+            status["fallback_reason"], status["source_url"], json.dumps(status["metadata"]),
+        )
 
     def _read_crude_price_api(self) -> list[dict]:
         from backend.shared.paths import project_root
@@ -641,21 +668,86 @@ class SanctionsIngestor(DataIngestor):
 
 
 class AISIngestor(DataIngestor):
-    """AIS vessel position / port congestion ingestion -- not yet wired to a live source.
+    """Persist the latest AISstream flat-file snapshot as an honest cache.
 
-    Previously generated fabricated congestion percentages, vessel counts,
-    and tanker availability via hash-based jitter, presented as if real. The
-    genuinely live equivalent (ml-platform's scripts/ingest_aisstream.py,
-    real AISstream.io vessel positions near major chokepoints) writes to a
-    flat CSV file, not a queryable table energy-service can join against per
-    request -- a real implementation needs that data exposed through an API
-    (or registered in ml.dataset_catalog and read via ml-platform's HTTP
-    surface), not a direct swap."""
+    This is deliberately *not* a streaming connector: the upstream collector
+    writes a CSV snapshot. We preserve its observation time and publish the
+    source as ``cached`` so neither risk scoring nor the UI can call it live.
+    """
 
     source_name = "ais"
 
     async def ingest(self) -> int:
-        raise NotImplementedError("AISIngestor has no live data source wired yet")
+        from backend.shared.paths import project_root
+        import csv
+
+        pool = await self._pool_or_default()
+        path = project_root() / "datasets" / "processed" / "ais-chokepoints" / "ais-chokepoints.csv"
+        if not path.exists():
+            await self._record_status(pool, None, "AISstream snapshot file is unavailable.", 0)
+            return 0
+        with path.open(newline="", encoding="utf-8") as source:
+            rows = list(csv.DictReader(source))
+        if not rows:
+            await self._record_status(pool, None, "AISstream snapshot file contains no positions.", 0)
+            return 0
+
+        observations: dict[str, dict[str, Any]] = {}
+        observed_at: datetime | None = None
+        for row in rows:
+            key = row.get("location_name") or "unknown"
+            ts = row.get("timestamp", "")
+            try:
+                timestamp = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if observed_at is None or timestamp > observed_at:
+                observed_at = timestamp
+            entry = observations.setdefault(key, {"count": 0, "lat": [], "lng": []})
+            entry["count"] += 1
+            try:
+                entry["lat"].append(float(row["latitude"]))
+                entry["lng"].append(float(row["longitude"]))
+            except (TypeError, ValueError, KeyError):
+                pass
+
+        if observed_at is None:
+            await self._record_status(pool, None, "AISstream snapshot has no parseable timestamps.", 0)
+            return 0
+        written = 0
+        for location, value in observations.items():
+            exists = await pool.fetchval(
+                "SELECT 1 FROM energy.ais_positions WHERE location_name=$1 AND recorded_at=$2 LIMIT 1",
+                location, observed_at,
+            )
+            if exists:
+                continue
+            lats, lngs = value["lat"], value["lng"]
+            if not lats or not lngs:
+                continue
+            await pool.execute(
+                """INSERT INTO energy.ais_positions
+                   (location_name, latitude, longitude, location_type, vessel_count, recorded_at)
+                   VALUES ($1,$2,$3,'chokepoint',$4,$5)""",
+                location, sum(lats) / len(lats), sum(lngs) / len(lngs), value["count"], observed_at,
+            )
+            written += 1
+        await self._record_status(pool, observed_at, "AISstream snapshot cache; not a continuous live feed.", written)
+        return written
+
+    async def _record_status(self, pool: asyncpg.Pool, observed_at: datetime | None, reason: str, rows: int) -> None:
+        await pool.execute(
+            """INSERT INTO energy.intelligence_source_status
+               (source_key, display_name, mode, observed_at, ingested_at, freshness_seconds,
+                fallback_reason, source_url, metadata, updated_at)
+               VALUES ('ais_chokepoints','AIS chokepoint observations','cached',$1::timestamptz,NOW(),
+                       CASE WHEN $1::timestamptz IS NULL THEN NULL ELSE EXTRACT(EPOCH FROM NOW() - $1::timestamptz) END,
+                       $2,NULL,$3,NOW())
+               ON CONFLICT (source_key) DO UPDATE SET mode='cached', observed_at=EXCLUDED.observed_at,
+                   ingested_at=NOW(), freshness_seconds=EXCLUDED.freshness_seconds,
+                   fallback_reason=EXCLUDED.fallback_reason, metadata=EXCLUDED.metadata, updated_at=NOW()""",
+            observed_at, reason, json.dumps({"rows_written": rows}),
+        )
 
     async def detect_signals(self, detector: SignalDetector) -> list[dict]:
         raise NotImplementedError("AISIngestor has no live data source wired yet")
@@ -684,7 +776,18 @@ class ArticleSignalIngestor(DataIngestor):
     LOOKBACK_HOURS = 24 * 14
     ARTICLE_SCAN_LIMIT = 150
     MAX_ENTITIES_PER_ARTICLE = 3
-    SIGNAL_TTL_HOURS = 72
+    # Was a flat 72 for every signal regardless of severity -- one of the
+    # inputs to corridor_risk.py's exposure formula that never actually
+    # varied, contributing to the Market Impact Feed's repetitive-looking
+    # dollar figures. A more severe disruption plausibly stays relevant
+    # longer, so scale the window with severity instead.
+    SIGNAL_TTL_HOURS_BY_SEVERITY = {
+        "low": 24,
+        "moderate": 48,
+        "elevated": 72,
+        "high": 96,
+        "critical": 120,
+    }
 
     TOPIC_TO_DIMENSION = {
         "war": "geopolitical",
@@ -772,7 +875,7 @@ class ArticleSignalIngestor(DataIngestor):
                     "affected_regions": regions,
                     "confidence": float(r["confidence"] or 0.7),
                     "evidence_urls": [r["url"]] if r["url"] else [],
-                    "ttl_hours": self.SIGNAL_TTL_HOURS,
+                    "ttl_hours": self.SIGNAL_TTL_HOURS_BY_SEVERITY.get(severity, 72),
                 })
                 created += 1
             except Exception as exc:
